@@ -1,0 +1,181 @@
+rules_version = '2';
+
+/**
+ * Firebase Storage Security Rules for HRIS Client Admin Web
+ *
+ * Enforces strict multi-tenant isolation, role-based access control,
+ * ownership boundaries, MIME type validation, and file size quotas.
+ *
+ * Supported Top-Level Hierarchies:
+ * - organizations/{orgId}/... (Canonical)
+ * - clients/{clientId}/...     (Symmetrical Alias)
+ */
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ============================================================================
+    // Helper Functions
+    // ============================================================================
+
+    // 1. Authentication check
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // 2. Tenant isolation via Custom Claims
+    function isTenantMember(orgId) {
+      return isAuthenticated() && (
+        request.auth.token.organizationId == orgId ||
+        request.auth.token.orgId == orgId
+      );
+    }
+
+    // 3. User identity / resource ownership
+    function isUser(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // 4. Role-based checks
+    function isOrgAdmin(orgId) {
+      return isTenantMember(orgId) && (
+        request.auth.token.role == 'org_admin' ||
+        request.auth.token.role == 'super_admin'
+      );
+    }
+
+    function isHrManager(orgId) {
+      return isTenantMember(orgId) && (
+        isOrgAdmin(orgId) ||
+        request.auth.token.role == 'hr_manager'
+      );
+    }
+
+    function isPayrollAdmin(orgId) {
+      return isTenantMember(orgId) && (
+        isOrgAdmin(orgId) ||
+        request.auth.token.role == 'payroll_admin'
+      );
+    }
+
+    function isDeptHead(orgId) {
+      return isTenantMember(orgId) && (
+        isHrManager(orgId) ||
+        request.auth.token.role == 'dept_head'
+      );
+    }
+
+    // 5. Content-type validators
+    function isImage() {
+      return request.resource.contentType.matches('image/(jpeg|png|webp|svg\\+xml)');
+    }
+
+    function isDocument() {
+      return request.resource.contentType.matches('application/pdf') ||
+             request.resource.contentType.matches('image/(jpeg|png)');
+    }
+
+    function isPdf() {
+      return request.resource.contentType.matches('application/pdf');
+    }
+
+    function isSpreadsheetOrDoc() {
+      return isDocument() ||
+             request.resource.contentType.matches('application/vnd\\.openxmlformats-officedocument\\.spreadsheetml\\.sheet') ||
+             request.resource.contentType.matches('application/vnd\\.ms-excel') ||
+             request.resource.contentType.matches('text/csv');
+    }
+
+    // 6. Size quotas
+    function isValidSize(maxMb) {
+      return request.resource.size < maxMb * 1024 * 1024;
+    }
+
+    // Default deny for unmatched storage paths
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    // ============================================================================
+    // Canonical Hierarchy: organizations/{orgId}
+    // ============================================================================
+    match /organizations/{orgId} {
+
+      // A. Company Branding & Logo
+      // /organizations/{orgId}/branding/{fileName}
+      match /branding/{fileName} {
+        allow read: if isTenantMember(orgId);
+        allow write: if isHrManager(orgId) && isImage() && isValidSize(5);
+      }
+
+      // B. User Avatars & Profile Photos
+      // /organizations/{orgId}/avatars/{userId}/{fileName}
+      match /avatars/{userId}/{fileName} {
+        allow read: if isTenantMember(orgId);
+        allow write: if (isUser(userId) && isTenantMember(orgId) || isOrgAdmin(orgId)) &&
+                        isImage() &&
+                        isValidSize(5);
+      }
+
+      // C. Employee Documents (Contracts, National IDs, Certificates)
+      // /organizations/{orgId}/employees/{employeeId}/documents/{fileName}
+      match /employees/{employeeId}/documents/{fileName} {
+        allow read: if isTenantMember(orgId) && (isUser(employeeId) || isHrManager(orgId));
+        allow write: if isTenantMember(orgId) && (isUser(employeeId) || isHrManager(orgId)) &&
+                        isDocument() &&
+                        isValidSize(15);
+      }
+
+      // D. Employee Payslips
+      // /organizations/{orgId}/employees/{employeeId}/payslips/{fileName}
+      match /employees/{employeeId}/payslips/{fileName} {
+        // Only the employee themselves, org_admin, or payroll_admin can read
+        // HR managers cannot read payslips without payroll_admin role
+        allow read: if isTenantMember(orgId) && (isUser(employeeId) || isPayrollAdmin(orgId));
+        // Only payroll_admin or org_admin can write payslips (PDF only, max 10MB)
+        allow write: if isPayrollAdmin(orgId) && isPdf() && isValidSize(10);
+      }
+
+      // E. General HR & Company Documents (Policies, Handbooks, Templates)
+      // /organizations/{orgId}/documents/{fileName}
+      match /documents/{fileName} {
+        allow read: if isTenantMember(orgId);
+        allow write: if isHrManager(orgId) && isSpreadsheetOrDoc() && isValidSize(25);
+      }
+    }
+
+    // ============================================================================
+    // Symmetrical Alias: clients/{clientId}
+    // ============================================================================
+    match /clients/{clientId} {
+
+      match /branding/{fileName} {
+        allow read: if isTenantMember(clientId);
+        allow write: if isHrManager(clientId) && isImage() && isValidSize(5);
+      }
+
+      match /avatars/{userId}/{fileName} {
+        allow read: if isTenantMember(clientId);
+        allow write: if (isUser(userId) && isTenantMember(clientId) || isOrgAdmin(clientId)) &&
+                        isImage() &&
+                        isValidSize(5);
+      }
+
+      match /employees/{employeeId}/documents/{fileName} {
+        allow read: if isTenantMember(clientId) && (isUser(employeeId) || isHrManager(clientId));
+        allow write: if isTenantMember(clientId) && (isUser(employeeId) || isHrManager(clientId)) &&
+                        isDocument() &&
+                        isValidSize(15);
+      }
+
+      match /employees/{employeeId}/payslips/{fileName} {
+        allow read: if isTenantMember(clientId) && (isUser(employeeId) || isPayrollAdmin(clientId));
+        allow write: if isPayrollAdmin(clientId) && isPdf() && isValidSize(10);
+      }
+
+      match /documents/{fileName} {
+        allow read: if isTenantMember(clientId);
+        allow write: if isHrManager(clientId) && isSpreadsheetOrDoc() && isValidSize(25);
+      }
+    }
+  }
+}
