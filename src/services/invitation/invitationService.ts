@@ -238,7 +238,7 @@ export class InvitationServiceImpl implements InvitationService {
       }
 
       // Dispatch invitation through backend email delivery boundary
-      const acceptUrl = `${typeof window !== 'undefined' ? window.location.origin : 'https://portal.clienthris.com'}/accept-invitation?token=${token}`;
+      const acceptUrl = `${typeof window !== 'undefined' ? window.location.origin : 'https://portal.clienthris.com'}/accept-invitation?token=${token}&email=${encodeURIComponent(invitation.email)}`;
       await emailDeliveryService.dispatchInvitationEmail(invitation, acceptUrl);
 
       // Record administrative audit log
@@ -302,7 +302,7 @@ export class InvitationServiceImpl implements InvitationService {
         }
       }
 
-      const acceptUrl = `${typeof window !== 'undefined' ? window.location.origin : 'https://portal.clienthris.com'}/accept-invitation?token=${updatedInvitation.token}`;
+      const acceptUrl = `${typeof window !== 'undefined' ? window.location.origin : 'https://portal.clienthris.com'}/accept-invitation?token=${updatedInvitation.token}&email=${encodeURIComponent(updatedInvitation.email)}`;
       await emailDeliveryService.dispatchInvitationEmail(updatedInvitation, acceptUrl);
 
       return updatedInvitation;

@@ -9,6 +9,7 @@ import { PermissionRoute } from './PermissionRoute';
 import { LoginPage } from '../features/auth/pages/LoginPage';
 import { ForgotPasswordPage } from '../features/auth/pages/ForgotPasswordPage';
 import { AcceptInvitationPage } from '../features/auth/pages/AcceptInvitationPage';
+import { ClientInviteLandingPage } from '../features/auth/pages/ClientInviteLandingPage';
 import { DashboardOverview } from '../features/dashboard/components/DashboardOverview';
 import { OrganizationProfilePage } from '../features/organization';
 import { SettingsPage } from '../features/settings';
@@ -61,6 +62,17 @@ export const router = createBrowserRouter([
       <PublicRoute>
         <AuthLayout title="Accept Invitation | HRIS Client Portal" subtitle="Account Setup">
           <AcceptInvitationPage />
+        </AuthLayout>
+      </PublicRoute>
+    ),
+  },
+  {
+    path: ROUTE_PATHS.CLIENT_INVITE,
+    errorElement: <RouteErrorBoundary />,
+    element: (
+      <PublicRoute allowInvitation>
+        <AuthLayout title="Client Invitation | HRIS Client Portal" subtitle="Accept Your Invitation">
+          <ClientInviteLandingPage />
         </AuthLayout>
       </PublicRoute>
     ),

@@ -6,14 +6,21 @@ import { AppLoading } from '../components/feedback/Loading/AppLoading';
 
 export interface PublicRouteProps {
   readonly children: React.ReactNode;
+  /**
+   * When true, the route is rendered even if the user is already authenticated.
+   * Use for invitation acceptance pages where the user may have clicked an
+   * invitation link while logged into a different account.
+   */
+  readonly allowInvitation?: boolean;
 }
 
 /**
  * Guard for public authentication routes (e.g. /login).
  * If Firebase Auth is still initializing, waits before redirecting.
  * If the user is already authenticated, redirects them to the dashboard or requested return route.
+ * If `allowInvitation` is true, the redirect is skipped for invitation flows.
  */
-export function PublicRoute({ children }: PublicRouteProps) {
+export function PublicRoute({ children, allowInvitation = false }: PublicRouteProps) {
   const { isAuthenticated, isInitializing } = useAuth();
   const location = useLocation();
 
@@ -24,6 +31,11 @@ export function PublicRoute({ children }: PublicRouteProps) {
         submessage="Checking credentials..."
       />
     );
+  }
+
+  // For invitation pages, always render the content regardless of auth state
+  if (allowInvitation) {
+    return <>{children}</>;
   }
 
   if (isAuthenticated) {
@@ -47,3 +59,4 @@ export function PublicRoute({ children }: PublicRouteProps) {
 
   return <>{children}</>;
 }
+

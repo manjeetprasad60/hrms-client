@@ -11,3 +11,4 @@ export interface AuthFeatureState {
 export * from './pages/LoginPage';
 export * from './pages/ForgotPasswordPage';
 export * from './pages/AcceptInvitationPage';
+export * from './pages/ClientInviteLandingPage';

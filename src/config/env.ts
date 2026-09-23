@@ -11,6 +11,7 @@ export interface AppEnvironment {
   readonly isDev: boolean;
   readonly isProd: boolean;
   readonly apiBaseUrl: string;
+  readonly invitationApiUrl: string;
   readonly firebase: {
     readonly apiKey: string;
     readonly authDomain: string;
@@ -34,7 +35,8 @@ export const env: AppEnvironment = {
   appEnv: parseAppEnv(import.meta.env.VITE_APP_ENV),
   isDev: import.meta.env.DEV,
   isProd: import.meta.env.PROD,
-  apiBaseUrl: import.meta.env.VITE_API_BASE_URL || '',
+  apiBaseUrl: import.meta.env.VITE_API_BASE_URL || 'http://192.168.0.208:5174',
+  invitationApiUrl: import.meta.env.VITE_INVITATION_API_URL || 'http://192.168.0.208:5174',
   firebase: {
     // apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
     // authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',

@@ -11,9 +11,17 @@ export default defineConfig({
     },
   },
   server: {
+    host: true,
     port: 5174,
     fs: {
       strict: true,
+    },
+    proxy: {
+      '/api': {
+        target: 'http://192.168.0.208:5001',
+        changeOrigin: true,
+        secure: false,
+      },
     },
   },
   build: {
