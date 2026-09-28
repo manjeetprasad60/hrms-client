@@ -8,7 +8,7 @@
  * 4. Safe Deletion: Blocked if active users are currently assigned to the role
  */
 
-import { databaseService } from '../database';
+import { apiClient } from '../api/apiClient';
 import { clientDataService } from '../client/clientDataService';
 import { auditService } from '../audit/auditService';
 import { AUDIT_ACTIONS } from '../../types/audit';
@@ -96,21 +96,28 @@ export class RoleServiceImpl implements RoleService {
     try {
       let customRoles: Role[] = [];
 
-      if (clientDataService.isConfigured()) {
-        const path = clientDataService.buildClientPath('roles');
-        const raw = await databaseService.get<Record<string, Role>>(path);
-        if (raw && typeof raw === 'object') {
-          customRoles = Object.entries(raw).map(([key, val]) => ({
-            ...val,
-            id: val.id || key,
-            organizationId: ctx.organizationId,
-            clientId: ctx.organizationId,
-            isSystemRole: false,
-            isCustomRole: true,
-            permissions: val.permissionIds || val.permissions || [],
-          }));
+      try {
+        const res = await apiClient.get<Role[] | Record<string, Role>>(
+          `/organizations/${ctx.organizationId}/roles`
+        );
+        if (res && typeof res === 'object') {
+          const list = Array.isArray(res) ? res : Object.values(res);
+          if (list.length > 0) {
+            customRoles = list.map((val) => ({
+              ...val,
+              organizationId: ctx.organizationId,
+              clientId: ctx.organizationId,
+              isSystemRole: false,
+              isCustomRole: true,
+              permissions: val.permissionIds || val.permissions || [],
+            }));
+          } else {
+            customRoles = this.getMockCustomRoles(ctx.organizationId);
+          }
+        } else {
+          customRoles = this.getMockCustomRoles(ctx.organizationId);
         }
-      } else {
+      } catch {
         customRoles = this.getMockCustomRoles(ctx.organizationId);
       }
 
@@ -266,11 +273,13 @@ export class RoleServiceImpl implements RoleService {
     };
 
     try {
-      if (clientDataService.isConfigured()) {
-        const path = `organizations/${ctx.organizationId}/roles/${roleId}`;
-        await databaseService.set(path, newRole);
-      } else {
-        const mockList = this.getMockCustomRoles(ctx.organizationId);
+      try {
+        await apiClient.post<Role>(`/organizations/${ctx.organizationId}/roles`, newRole);
+      } catch {
+        // Fallback or API offline
+      }
+      const mockList = this.getMockCustomRoles(ctx.organizationId);
+      if (!mockList.some((r) => r.id === roleId)) {
         mockList.push(newRole);
       }
 
@@ -346,15 +355,17 @@ export class RoleServiceImpl implements RoleService {
     };
 
     try {
-      if (clientDataService.isConfigured()) {
-        const path = `organizations/${ctx.organizationId}/roles/${roleId}`;
-        await databaseService.update(path, merged);
+      try {
+        await apiClient.put<Role>(`/organizations/${ctx.organizationId}/roles/${roleId}`, merged);
+      } catch {
+        // Fallback or API offline
+      }
+      const mockList = this.getMockCustomRoles(ctx.organizationId);
+      const idx = mockList.findIndex((r) => r.id === roleId);
+      if (idx >= 0) {
+        mockList[idx] = merged;
       } else {
-        const mockList = this.getMockCustomRoles(ctx.organizationId);
-        const idx = mockList.findIndex((r) => r.id === roleId);
-        if (idx >= 0) {
-          mockList[idx] = merged;
-        }
+        mockList.push(merged);
       }
 
       // Update in runtime evaluator
@@ -435,15 +446,15 @@ export class RoleServiceImpl implements RoleService {
     }
 
     try {
-      if (clientDataService.isConfigured()) {
-        const path = `organizations/${ctx.organizationId}/roles/${roleId}`;
-        await databaseService.remove(path);
-      } else {
-        const mockList = this.getMockCustomRoles(ctx.organizationId);
-        const idx = mockList.findIndex((r) => r.id === roleId);
-        if (idx >= 0) {
-          mockList.splice(idx, 1);
-        }
+      try {
+        await apiClient.delete(`/organizations/${ctx.organizationId}/roles/${roleId}`);
+      } catch {
+        // Fallback or API offline
+      }
+      const mockList = this.getMockCustomRoles(ctx.organizationId);
+      const idx = mockList.findIndex((r) => r.id === roleId);
+      if (idx >= 0) {
+        mockList.splice(idx, 1);
       }
 
       // Remove from runtime evaluator

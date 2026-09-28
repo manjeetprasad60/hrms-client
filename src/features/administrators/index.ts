@@ -1,0 +1,1 @@
+export { AdministratorManagementPage } from './pages/AdministratorManagementPage';

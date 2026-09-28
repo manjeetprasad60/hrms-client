@@ -44,7 +44,17 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
   }
 
   const session = authService.getCurrentSession();
-  const token = session?.token;
+  let token = session?.token;
+  if (!token) {
+    const fbUser = authService.getCurrentFirebaseUser();
+    if (fbUser) {
+      try {
+        token = await fbUser.getIdToken();
+      } catch {
+        // Token retrieval failure non-blocking
+      }
+    }
+  }
 
   const requestHeaders: Record<string, string> = {
     'Content-Type': 'application/json',

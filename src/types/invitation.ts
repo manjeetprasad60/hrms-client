@@ -61,7 +61,11 @@ export interface UserInvitation {
   readonly locationIds?: readonly string[];
   readonly customPermissions?: readonly string[];
   readonly phone?: string;
+  readonly phoneNumber?: string;
+  readonly photoURL?: string;
+  readonly avatarUrl?: string;
   readonly employeeId?: string;
+  readonly clientId?: string;
 
   /**
    * Metadata of the administrative user who dispatched this invitation.

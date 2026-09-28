@@ -15,7 +15,7 @@ import {
   type User as FirebaseUser,
 } from 'firebase/auth';
 import { firebaseClient, getFirebaseAuth } from '../firebase';
-import { databaseService } from '../database/databaseService';
+import { env } from '../../config/env';
 import { CLIENT_ROLES, type ClientRole } from '../../permissions/roles';
 import { mapFirebaseErrorToMessage } from './authErrors';
 import type {
@@ -106,6 +106,29 @@ export class AuthServiceImpl implements AuthService {
 
   public getAuthStatus(): AuthStatus {
     return this.status;
+  }
+
+  public setCompanyContext(companyId: string, companyName: string): void {
+    if (!companyId || !this.currentSession) {
+      throw new Error('An authenticated session and company ID are required.');
+    }
+
+    const slug = companyName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    this.currentSession = {
+      ...this.currentSession,
+      user: {
+        ...this.currentSession.user,
+        organizationId: companyId,
+        clientId: companyId,
+        companyId,
+      },
+      organization: {
+        id: companyId,
+        name: companyName,
+        slug: slug || companyId,
+      },
+    };
+    this.notifyListeners();
   }
 
   public async signInWithEmail(credentials: LoginCredentials): Promise<AuthSession> {
@@ -205,8 +228,9 @@ export class AuthServiceImpl implements AuthService {
         user: {
           id: fallbackUid,
           authUid: fallbackUid,
-          organizationId: 'org_client_01',
-          clientId: 'org_client_01',
+          organizationId: 'org_unassigned',
+          clientId: 'org_unassigned',
+          companyId: 'org_unassigned',
           email: cleanEmail,
           firstName,
           lastName,
@@ -223,7 +247,7 @@ export class AuthServiceImpl implements AuthService {
           updatedAt: new Date().toISOString(),
         },
         organization: {
-          id: 'org_client_01',
+          id: 'org_unassigned',
           name: 'Client Workspace',
           slug: 'client-workspace',
         },
@@ -284,7 +308,7 @@ export class AuthServiceImpl implements AuthService {
     const firstName = nameParts[0] || (fallbackName.charAt(0).toUpperCase() + fallbackName.slice(1));
     const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : 'Admin';
 
-    let orgId = 'org_client_01';
+    let orgId = 'org_unassigned';
     let role: ClientRole = CLIENT_ROLES.ORG_ADMIN;
     let orgName = 'Client Workspace';
     let orgSlug = 'client-workspace';
@@ -292,10 +316,16 @@ export class AuthServiceImpl implements AuthService {
     // 1. Resolve from custom claims on token if present
     try {
       const tokenResult = await user.getIdTokenResult();
-      const claimOrgId = (tokenResult.claims['organizationId'] || tokenResult.claims['orgId']) as string | undefined;
+      const claimCompanyId = (
+        tokenResult.claims['companyId'] ||
+        tokenResult.claims['company_id'] ||
+        tokenResult.claims['organizationId'] ||
+        tokenResult.claims['org_id']
+      ) as string | undefined;
       const claimRole = tokenResult.claims['role'] as ClientRole | undefined;
-      if (claimOrgId) {
-        orgId = claimOrgId;
+
+      if (claimCompanyId && claimCompanyId !== user.uid) {
+        orgId = claimCompanyId;
       }
       if (claimRole && (Object.values(CLIENT_ROLES) as ClientRole[]).includes(claimRole)) {
         role = claimRole;
@@ -304,31 +334,68 @@ export class AuthServiceImpl implements AuthService {
       // Token claims evaluation non-blocking
     }
 
-    // 2. Query root database index (users/{uid}) if database is configured
-    if (databaseService.isConfigured()) {
-      try {
-        const rootUser = await databaseService.get<{
-          organizationId?: string;
-          role?: ClientRole;
-          organizationName?: string;
-        }>(`users/${user.uid}`);
+    // 2. Validate/enrich user with backend API (/api/auth/user)
+    try {
+      const baseUrl = env.apiBaseUrl.replace(/\/+$/, '');
+      const authUserUrl = baseUrl.endsWith('/api') ? `${baseUrl}/auth/user` : `${baseUrl}/api/auth/user`;
+      const response = await fetch(authUserUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
 
-        if (rootUser?.organizationId) {
-          orgId = rootUser.organizationId;
-        } else if (orgId === 'org_client_01') {
-          // If no custom claims and user not found in root index, user has no assigned client
-          orgId = 'org_unassigned';
+      if (response.ok) {
+        const body = await response.json();
+        const anyBody = body as Record<string, unknown> | null;
+        const candidateUser = (
+          (anyBody?.data && typeof anyBody.data === 'object' && 'user' in anyBody.data ? (anyBody.data as Record<string, unknown>).user : null) ||
+          (anyBody?.user && typeof anyBody.user === 'object' ? anyBody.user : null) ||
+          (anyBody?.data && typeof anyBody.data === 'object' ? anyBody.data : null) ||
+          (anyBody?.result && typeof anyBody.result === 'object' ? anyBody.result : null) ||
+          anyBody
+        ) as Record<string, unknown> | null;
+
+        // In /api/auth/user response, user receives companyId (e.g. "cmp_hrms_28_2886")
+        const resolvedCompanyId = (
+          candidateUser?.companyId ||
+          anyBody?.companyId ||
+          candidateUser?.company_id ||
+          anyBody?.company_id ||
+          (candidateUser?.company && typeof candidateUser.company === 'object' ? (candidateUser.company as Record<string, unknown>).id : null) ||
+          (anyBody?.data && typeof anyBody.data === 'object' ? (anyBody.data as Record<string, unknown>).companyId : null) ||
+          (candidateUser?.organizationId && candidateUser.organizationId !== user.uid ? candidateUser.organizationId : null) ||
+          (anyBody?.organizationId && anyBody.organizationId !== user.uid ? anyBody.organizationId : null)
+        ) as string | undefined;
+
+        // Target company ID must be prioritized over user uid
+        if (resolvedCompanyId && resolvedCompanyId !== user.uid) {
+          orgId = resolvedCompanyId;
         }
-        if (rootUser?.role && (Object.values(CLIENT_ROLES) as ClientRole[]).includes(rootUser.role)) {
-          role = rootUser.role;
+
+        const candidateRole = (candidateUser?.role || anyBody?.role) as ClientRole | undefined;
+        if (candidateRole && (Object.values(CLIENT_ROLES) as ClientRole[]).includes(candidateRole)) {
+          role = candidateRole;
         }
-        if (rootUser?.organizationName) {
-          orgName = rootUser.organizationName;
-          orgSlug = rootUser.organizationName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+        const name = (
+          candidateUser?.companyName ||
+          candidateUser?.organizationName ||
+          anyBody?.companyName ||
+          anyBody?.organizationName ||
+          (candidateUser?.company && typeof candidateUser.company === 'object' ? (candidateUser.company as Record<string, unknown>).displayName : null) ||
+          (candidateUser?.company && typeof candidateUser.company === 'object' ? (candidateUser.company as Record<string, unknown>).legalName : null) ||
+          (candidateUser?.company && typeof candidateUser.company === 'object' ? (candidateUser.company as Record<string, unknown>).name : null)
+        ) as string | undefined;
+
+        if (name) {
+          orgName = name;
+          orgSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
         }
-      } catch (err) {
-        console.warn('[AuthService] Root user mapping notice:', err);
       }
+    } catch (err) {
+      console.warn('[AuthService] Backend profile validation notice:', err);
     }
 
     const clientUser: ClientUser = {
@@ -336,6 +403,7 @@ export class AuthServiceImpl implements AuthService {
       authUid: user.uid,
       organizationId: orgId,
       clientId: orgId,
+      companyId: orgId,
       email: user.email || '',
       firstName,
       lastName,

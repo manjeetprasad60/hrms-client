@@ -3,7 +3,6 @@
  *
  * Manages Firebase app initialization state and provides access to core services:
  * - Firebase Authentication (getAuth)
- * - Firebase Realtime Database (getDatabase)
  * - Firebase Storage (getStorage)
  *
  * Implements the centralized initialization layer:
@@ -12,7 +11,6 @@
 
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
 import { getAuth, type Auth } from 'firebase/auth';
-import { getDatabase, type Database } from 'firebase/database';
 import { getStorage, type FirebaseStorage } from 'firebase/storage';
 import {
   checkFirebaseConfig,
@@ -35,7 +33,6 @@ export class FirebaseClientCoordinator {
   private clientState: FirebaseClientState = 'unconfigured';
   private appInstance: FirebaseApp | null = null;
   private authInstance: Auth | null = null;
-  private databaseInstance: Database | null = null;
   private storageInstance: FirebaseStorage | null = null;
   private initializationError: string | null = null;
 
@@ -54,7 +51,6 @@ export class FirebaseClientCoordinator {
       this.clientState = 'unconfigured';
       this.appInstance = null;
       this.authInstance = null;
-      this.databaseInstance = null;
       this.storageInstance = null;
       return this.getStatus();
     }
@@ -67,7 +63,6 @@ export class FirebaseClientCoordinator {
       }
 
       this.authInstance = getAuth(this.appInstance);
-      this.databaseInstance = getDatabase(this.appInstance);
       this.storageInstance = getStorage(this.appInstance);
       this.clientState = 'ready';
       this.initializationError = null;
@@ -115,13 +110,6 @@ export class FirebaseClientCoordinator {
   }
 
   /**
-   * Accesses the Firebase Realtime Database instance if initialized.
-   */
-  public getDatabase(): Database | null {
-    return this.databaseInstance;
-  }
-
-  /**
    * Accesses the Firebase Storage instance if initialized.
    */
   public getStorage(): FirebaseStorage | null {
@@ -138,6 +126,5 @@ export const firebaseClient = new FirebaseClientCoordinator();
 // Export convenient standalone accessors for service modules
 export const getFirebaseApp = (): FirebaseApp | null => firebaseClient.getApp();
 export const getFirebaseAuth = (): Auth | null => firebaseClient.getAuth();
-export const getFirebaseDatabase = (): Database | null => firebaseClient.getDatabase();
 export const getFirebaseStorage = (): FirebaseStorage | null => firebaseClient.getStorage();
 export const isFirebaseReady = (): boolean => firebaseClient.isReady();

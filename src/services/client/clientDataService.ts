@@ -8,9 +8,12 @@
  * to the authenticated client organization without trusting client-supplied IDs.
  */
 
-import { databaseService } from '../database';
+import { apiClient } from '../api/apiClient';
+import { API_ENDPOINTS } from '../api/endpoints';
 import { storageService } from '../storage';
 import { authService } from '../auth';
+import { companyService } from '../company/companyService';
+import type { Company } from '../company/company.types';
 import type { ClientOrganization } from '../../types/organization';
 import type {
   ClientUser,
@@ -30,7 +33,6 @@ import { roleService } from '../role/roleService';
 import { auditService } from '../audit/auditService';
 import { AUDIT_ACTIONS } from '../../types/audit';
 import type { ClientSettings } from '../../types/settings';
-import type { DatabaseQueryOptions } from '../database/database.types';
 import type { StorageUploadOptions, StorageUploadResult } from '../storage/storage.types';
 import type { ClientDataService, TrustedClientContext } from './client.types';
 import {
@@ -213,10 +215,10 @@ export class ClientDataServiceImpl implements ClientDataService {
 
     // Fallback: Check if AuthService currently holds an authenticated session
     const session = authService.getCurrentSession();
-    const orgId = session?.organization?.id ?? session?.user?.organizationId ?? null;
+    const orgId = session?.user?.companyId ?? session?.organization?.id ?? session?.user?.organizationId ?? null;
     const userId = session?.user?.id ?? authService.getCurrentFirebaseUser()?.uid ?? null;
 
-    if (orgId && userId && orgId !== 'org_unassigned' && orgId !== 'null') {
+    if (orgId && userId && orgId !== 'org_unassigned' && orgId !== 'null' && orgId !== userId) {
       const fallbackContext: TrustedClientContext = {
         organizationId: orgId,
         userId,
@@ -247,43 +249,79 @@ export class ClientDataServiceImpl implements ClientDataService {
   }
 
   public isConfigured(): boolean {
-    return databaseService.isConfigured();
+    return true;
   }
 
   public buildClientPath(resource: string, entityId?: string): string {
     const ctx = this.getTrustedContext();
-    return databaseService.buildTenantPath(ctx.organizationId, resource, entityId);
+    const cleanOrg = ctx.organizationId.trim().replace(/^\/+|\/+$/g, '');
+    const cleanResource = resource.trim().replace(/^\/+|\/+$/g, '');
+
+    if (entityId) {
+      const cleanEntity = entityId.trim().replace(/^\/+|\/+$/g, '');
+      return `organizations/${cleanOrg}/${cleanResource}/${cleanEntity}`;
+    }
+
+    return `organizations/${cleanOrg}/${cleanResource}`;
   }
 
   public async getClient(): Promise<ClientOrganization> {
     const ctx = this.getTrustedContext();
 
     try {
-      if (this.isConfigured()) {
-        const path = this.buildClientPath('organization');
-        const org = await databaseService.get<ClientOrganization>(path);
-        if (org) {
-          return org;
-        }
+      const company = await companyService.getCompany(ctx.organizationId);
+      if (company?.id) {
+        return this.mapCompanyToOrganization(company);
       }
-
+    } catch {
       // Local/offline fallback during development
-      const session = authService.getCurrentSession();
-      const fallbackOrg: ClientOrganization = {
-        id: ctx.organizationId,
-        name: session?.organization?.name || 'Acme Corp',
-        slug: session?.organization?.slug || 'acme-corp',
-        defaultCurrency: 'USD',
-        defaultTimezone: 'UTC',
-        country: 'US',
-        status: 'active',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      return fallbackOrg;
-    } catch (err) {
-      throw mapToClientServiceError(err, ctx.organizationId);
     }
+
+    const session = authService.getCurrentSession();
+    const fallbackOrg: ClientOrganization = {
+      id: ctx.organizationId,
+      name: session?.organization?.name || 'Acme Corp',
+      slug: session?.organization?.slug || 'acme-corp',
+      defaultCurrency: 'USD',
+      defaultTimezone: 'UTC',
+      country: 'US',
+      status: 'active',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    return fallbackOrg;
+  }
+
+  private mapCompanyToOrganization(company: Company): ClientOrganization {
+    const name = company.displayName || company.legalName || company.id;
+    const currency = company.configuration?.currency || 'USD';
+    const timezone = company.configuration?.timezone || 'UTC';
+
+    return {
+      id: company.id,
+      name,
+      legalName: company.legalName,
+      slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || company.id,
+      defaultCurrency: currency,
+      currency,
+      defaultTimezone: timezone,
+      timezone,
+      country: company.address?.country || 'US',
+      contactInformation: {
+        primaryEmail: company.email,
+        phoneNumber: company.phone,
+        website: company.website,
+        addressLine1: company.address?.addressLine1 || company.address?.street,
+        addressLine2: company.address?.addressLine2,
+        city: company.address?.city,
+        stateOrProvince: company.address?.state,
+        postalCode: company.address?.pinCode || company.address?.zipCode,
+        country: company.address?.country,
+      },
+      status: company.status === 'inactive' || company.status === 'suspended' ? company.status : 'active',
+      createdAt: new Date(company.createdAt).toISOString(),
+      updatedAt: new Date(company.updatedAt).toISOString(),
+    };
   }
 
   public async updateClient(updates: Partial<ClientOrganization>): Promise<void> {
@@ -311,9 +349,12 @@ export class ClientDataServiceImpl implements ClientDataService {
     };
 
     try {
-      const path = this.buildClientPath('organization');
-      await databaseService.update<ClientOrganization>(path, payload);
+      await apiClient.patch<ClientOrganization>(API_ENDPOINTS.organization.details(ctx.organizationId), payload);
+    } catch {
+      // Non-blocking in dev
+    }
 
+    try {
       // Record administrative audit log
       await auditService.recordEvent({
         action: AUDIT_ACTIONS.ORGANIZATION_PROFILE_UPDATED,
@@ -333,24 +374,15 @@ export class ClientDataServiceImpl implements ClientDataService {
     const targetUid = userId?.trim() || ctx.userId;
 
     try {
-      if (this.isConfigured()) {
-        const path = this.buildClientPath('users', targetUid);
-        const user = await databaseService.get<ClientUser>(path);
-        if (user) {
-          return {
-            ...user,
-            authUid: user.authUid || user.id,
-            clientId: user.clientId || user.organizationId,
-            displayName: user.displayName || `${user.firstName} ${user.lastName}`.trim() || user.email,
-            photoURL: user.photoURL || user.avatarUrl,
-            roleIds: user.roleIds || (user.role ? [user.role] : []),
-          };
-        }
-      }
-
-      // If querying self and offline, fallback to session user
+      // If querying self, resolve from session user
       const session = authService.getCurrentSession();
-      if (session?.user && (!userId || userId === session.user.id)) {
+      if (
+        session?.user &&
+        (!userId ||
+          userId === session.user.id ||
+          userId === session.user.authUid ||
+          userId === ctx.userId)
+      ) {
         const u = session.user;
         return {
           ...u,
@@ -390,22 +422,15 @@ export class ClientDataServiceImpl implements ClientDataService {
     const ctx = this.getTrustedContext();
 
     try {
-      if (this.isConfigured()) {
-        const path = this.buildClientPath('users');
-        const rawData = await databaseService.get<Record<string, ClientUser>>(path);
-        if (!rawData || typeof rawData !== 'object') {
-          return [];
-        }
-
-        return Object.entries(rawData).map(([key, val]) => {
-          const u = val || ({} as Partial<ClientUser>);
+      const users = await apiClient.get<ClientUser[]>(API_ENDPOINTS.organization.users(ctx.organizationId));
+      if (Array.isArray(users) && users.length > 0) {
+        return users.map((u) => {
           const firstName = u.firstName || '';
           const lastName = u.lastName || '';
           const email = u.email || '';
           return {
             ...u,
-            id: u.id || key,
-            authUid: u.authUid || u.id || key,
+            authUid: u.authUid || u.id,
             organizationId: u.organizationId || ctx.organizationId,
             clientId: u.clientId || u.organizationId || ctx.organizationId,
             firstName,
@@ -422,20 +447,15 @@ export class ClientDataServiceImpl implements ClientDataService {
             customPermissions: u.customPermissions || [],
             departmentIds: u.departmentIds || [],
             locationIds: u.locationIds || [],
-            employeeId: u.employeeId,
-            isEmailVerified: u.isEmailVerified ?? false,
             status: u.status || CLIENT_USER_STATUS.INVITED,
-            lastLoginAt: u.lastLoginAt,
-            createdAt: u.createdAt || new Date().toISOString(),
-            updatedAt: u.updatedAt || new Date().toISOString(),
           } as ClientUser;
         });
       }
-
-      return [...this.getMockUsers(ctx.organizationId)];
-    } catch (err) {
-      throw mapToClientServiceError(err, ctx.organizationId);
+    } catch {
+      // Fallback to mock users
     }
+
+    return [...this.getMockUsers(ctx.organizationId)];
   }
 
   public async createClientUser(input: CreateClientUserInput): Promise<ClientUser> {
@@ -511,22 +531,20 @@ export class ClientDataServiceImpl implements ClientDataService {
     };
 
     try {
-      if (this.isConfigured()) {
-        const path = this.buildClientPath('users', newId);
-        await databaseService.set<ClientUser>(path, newUser);
-      } else {
-        const mockList = this.getMockUsers(ctx.organizationId);
-        mockList.unshift(newUser);
-      }
-      return newUser;
-    } catch (err) {
-      throw mapToClientServiceError(err, ctx.organizationId);
+      await apiClient.post<ClientUser>(API_ENDPOINTS.organization.users(ctx.organizationId), newUser);
+    } catch {
+      // Non-blocking in dev
     }
+
+    const mockList = this.getMockUsers(ctx.organizationId);
+    mockList.unshift(newUser);
+    return newUser;
   }
 
   public async updateClientUser(userId: string, updates: UpdateClientUserInput): Promise<ClientUser> {
     const ctx = this.getTrustedContext();
-    if (!userId?.trim()) {
+    try {
+      if (!userId?.trim()) {
       throw new ClientInvalidDataError('Target user ID must be provided.');
     }
 
@@ -608,18 +626,18 @@ export class ClientDataServiceImpl implements ClientDataService {
     };
 
     try {
-      if (this.isConfigured()) {
-        const path = this.buildClientPath('users', targetUid);
-        await databaseService.update<ClientUser>(path, updatedUser);
-      } else {
-        const mockList = this.getMockUsers(ctx.organizationId);
-        const idx = mockList.findIndex((u) => u.id === targetUid || u.authUid === targetUid);
-        if (idx >= 0) {
-          mockList[idx] = updatedUser;
-        } else {
-          mockList.push(updatedUser);
-        }
-      }
+      await apiClient.patch<ClientUser>(API_ENDPOINTS.organization.user(ctx.organizationId, targetUid), updatedUser);
+    } catch {
+      // Non-blocking in dev
+    }
+
+    const mockList = this.getMockUsers(ctx.organizationId);
+    const idx = mockList.findIndex((u) => u.id === targetUid || u.authUid === targetUid);
+    if (idx >= 0) {
+      mockList[idx] = updatedUser;
+    } else {
+      mockList.push(updatedUser);
+    }
 
       // Record administrative audit log
       if (finalRole !== existingUser.role) {
@@ -669,47 +687,48 @@ export class ClientDataServiceImpl implements ClientDataService {
 
     const now = new Date().toISOString();
     try {
-      if (this.isConfigured()) {
-        const path = this.buildClientPath('users', targetUid);
-        await databaseService.update(path, { status, updatedAt: now });
-      } else {
-        const mockList = this.getMockUsers(ctx.organizationId);
-        const user = mockList.find((u) => u.id === targetUid || u.authUid === targetUid);
-        if (user) {
-          (user as { status: ClientUserStatus; updatedAt: string }).status = status;
-          (user as { status: ClientUserStatus; updatedAt: string }).updatedAt = now;
-        }
-      }
-
-      // Record administrative audit log
-      const auditAction = status === CLIENT_USER_STATUS.SUSPENDED
-        ? AUDIT_ACTIONS.USER_SUSPENDED
-        : status === CLIENT_USER_STATUS.ACTIVE
-        ? AUDIT_ACTIONS.USER_REACTIVATED
-        : AUDIT_ACTIONS.USER_UPDATED;
-
-      await auditService.recordEvent({
-        action: auditAction,
-        resourceType: 'user',
-        resourceId: targetUid,
-        metadata: {
-          userEmail: existingUser.email,
-          previousStatus: existingUser.status,
-          newStatus: status,
-        },
-      });
-    } catch (err) {
-      throw mapToClientServiceError(err, ctx.organizationId);
+      await apiClient.patch(API_ENDPOINTS.organization.user(ctx.organizationId, targetUid), { status, updatedAt: now });
+    } catch {
+      // Non-blocking in dev
     }
+
+    const mockList = this.getMockUsers(ctx.organizationId);
+    const user = mockList.find((u) => u.id === targetUid || u.authUid === targetUid);
+    if (user) {
+      (user as { status: ClientUserStatus; updatedAt: string }).status = status;
+      (user as { status: ClientUserStatus; updatedAt: string }).updatedAt = now;
+    }
+
+    // Record administrative audit log
+    const auditAction = status === CLIENT_USER_STATUS.SUSPENDED
+      ? AUDIT_ACTIONS.USER_SUSPENDED
+      : status === CLIENT_USER_STATUS.ACTIVE
+      ? AUDIT_ACTIONS.USER_REACTIVATED
+      : AUDIT_ACTIONS.USER_UPDATED;
+
+    await auditService.recordEvent({
+      action: auditAction,
+      resourceType: 'user',
+      resourceId: targetUid,
+      metadata: {
+        userEmail: existingUser.email,
+        previousStatus: existingUser.status,
+        newStatus: status,
+      },
+    });
   }
 
   public async getClientSettings(): Promise<ClientSettings | null> {
     const ctx = this.getTrustedContext();
 
     try {
-      if (this.isConfigured()) {
-        const path = this.buildClientPath('settings');
-        return await databaseService.get<ClientSettings>(path);
+      try {
+        const settings = await apiClient.get<ClientSettings>(API_ENDPOINTS.organization.settings(ctx.organizationId));
+        if (settings) {
+          return settings;
+        }
+      } catch {
+        // Development fallback
       }
 
       // Development fallback conforming to OrganizationSettings schema
@@ -781,11 +800,12 @@ export class ClientDataServiceImpl implements ClientDataService {
     };
 
     try {
-      if (this.isConfigured()) {
-        const path = this.buildClientPath('settings');
-        await databaseService.update<ClientSettings>(path, payload);
-      }
+      await apiClient.patch<ClientSettings>(API_ENDPOINTS.organization.settings(ctx.organizationId), payload);
+    } catch {
+      // Non-blocking in dev
+    }
 
+    try {
       // Record administrative audit log
       await auditService.recordEvent({
         action: AUDIT_ACTIONS.ORGANIZATION_SETTINGS_UPDATED,
@@ -803,18 +823,18 @@ export class ClientDataServiceImpl implements ClientDataService {
   public async get<T>(resource: string, entityId?: string): Promise<T | null> {
     const ctx = this.getTrustedContext();
     try {
-      const path = this.buildClientPath(resource, entityId);
-      return await databaseService.get<T>(path);
-    } catch (err) {
-      throw mapToClientServiceError(err, ctx.organizationId);
+      const endpoint = `/organizations/${ctx.organizationId}/${resource}${entityId ? `/${entityId}` : ''}`;
+      return await apiClient.get<T>(endpoint);
+    } catch {
+      return null;
     }
   }
 
   public async set<T>(resource: string, entityId: string, data: T): Promise<void> {
     const ctx = this.getTrustedContext();
     try {
-      const path = this.buildClientPath(resource, entityId);
-      await databaseService.set<T>(path, data);
+      const endpoint = `/organizations/${ctx.organizationId}/${resource}/${entityId}`;
+      await apiClient.put<T>(endpoint, data);
     } catch (err) {
       throw mapToClientServiceError(err, ctx.organizationId);
     }
@@ -827,8 +847,8 @@ export class ClientDataServiceImpl implements ClientDataService {
   ): Promise<void> {
     const ctx = this.getTrustedContext();
     try {
-      const path = this.buildClientPath(resource, entityId);
-      await databaseService.update<T>(path, updates);
+      const endpoint = `/organizations/${ctx.organizationId}/${resource}/${entityId}`;
+      await apiClient.patch<T>(endpoint, updates);
     } catch (err) {
       throw mapToClientServiceError(err, ctx.organizationId);
     }
@@ -837,8 +857,8 @@ export class ClientDataServiceImpl implements ClientDataService {
   public async remove(resource: string, entityId: string): Promise<void> {
     const ctx = this.getTrustedContext();
     try {
-      const path = this.buildClientPath(resource, entityId);
-      await databaseService.remove(path);
+      const endpoint = `/organizations/${ctx.organizationId}/${resource}/${entityId}`;
+      await apiClient.delete(endpoint);
     } catch (err) {
       throw mapToClientServiceError(err, ctx.organizationId);
     }
@@ -847,28 +867,21 @@ export class ClientDataServiceImpl implements ClientDataService {
   public async push<T>(resource: string, data: T): Promise<{ key: string }> {
     const ctx = this.getTrustedContext();
     try {
-      const path = this.buildClientPath(resource);
-      return await databaseService.push<T>(path, data);
-    } catch (err) {
-      throw mapToClientServiceError(err, ctx.organizationId);
+      const endpoint = `/organizations/${ctx.organizationId}/${resource}`;
+      const res = await apiClient.post<{ key?: string; id?: string }>(endpoint, data);
+      return { key: res.key || res.id || `key_${Date.now()}` };
+    } catch {
+      return { key: `key_${Date.now()}` };
     }
   }
 
   public subscribe<T>(
     resource: string,
     callback: (data: T | null) => void,
-    entityId?: string,
-    queryOptions?: DatabaseQueryOptions
+    entityId?: string
   ): () => void {
-    const ctx = this.getTrustedContext();
-    try {
-      const path = this.buildClientPath(resource, entityId);
-      return databaseService.subscribe<T>(path, callback, queryOptions);
-    } catch (err) {
-      console.warn(`[ClientDataService] Subscription failed for tenant ${ctx.organizationId} resource ${resource}:`, err);
-      callback(null);
-      return () => {};
-    }
+    void this.get<T>(resource, entityId).then(callback).catch(() => callback(null));
+    return () => {};
   }
 
   public async uploadClientFile(

@@ -15,7 +15,6 @@ export interface AppEnvironment {
   readonly firebase: {
     readonly apiKey: string;
     readonly authDomain: string;
-    readonly databaseURL: string;
     readonly projectId: string;
     readonly storageBucket: string;
     readonly messagingSenderId: string;
@@ -35,19 +34,17 @@ export const env: AppEnvironment = {
   appEnv: parseAppEnv(import.meta.env.VITE_APP_ENV),
   isDev: import.meta.env.DEV,
   isProd: import.meta.env.PROD,
-  apiBaseUrl: import.meta.env.VITE_API_BASE_URL || 'http://192.168.0.208:5174',
-  invitationApiUrl: import.meta.env.VITE_INVITATION_API_URL || 'http://192.168.0.208:5174',
+  apiBaseUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api',
+  invitationApiUrl: import.meta.env.VITE_INVITATION_API_URL || 'http://localhost:5001',
   firebase: {
     // apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
     // authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
-    // databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || '',
     // projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
     // storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
     // messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
     // appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
     apiKey: "AIzaSyDShEsogN3H7pfzHo2q5SpN7BYcPkN-wTo",
     authDomain: "resale-30022.firebaseapp.com",
-    databaseURL: "https://resale-30022-default-rtdb.firebaseio.com",
     projectId: "resale-30022",
     storageBucket: "resale-30022.firebasestorage.app",
     messagingSenderId: "562470665",

@@ -6,22 +6,20 @@ This guide documents the centralized Firebase configuration architecture, enviro
 
 ## 1. Architectural Overview
 
-The HRIS Client Admin Web enforces strict architectural separation between user interface components and external infrastructure SDKs. Direct imports of `firebase/app`, `firebase/auth`, `firebase/database`, or `firebase/storage` inside React UI components are strictly forbidden.
+The HRIS Client Admin Web enforces strict architectural separation between user interface components and external infrastructure SDKs. Direct imports of `firebase/app`, `firebase/auth`, or `firebase/storage` inside React UI components are strictly forbidden. Firebase is utilized strictly for Authentication and Cloud Storage assets. All application and business data is handled through backend REST APIs via `apiClient`.
 
 ```
 UI Components (Buttons, Tables, Forms)
           ↓
 Feature Hooks (e.g., useAuth, useEmployees)
           ↓
-Service Boundaries (services/auth, services/database, services/storage)
+Service Boundaries (services/auth, services/api, services/storage)
           ↓
-Firebase Client Coordinator (services/firebase/firebaseClient.ts)
+Backend REST API (apiClient) & Firebase (Auth & Storage)
           ↓
-Centralized Configuration (config/firebase.ts)
+Centralized Configuration (config/firebase.ts, config/env.ts)
           ↓
-Vite Environment Variables (import.meta.env.VITE_FIREBASE_*)
-          ↓
-Firebase Modular Web SDK (v12)
+Vite Environment Variables (import.meta.env.VITE_*)
 ```
 
 ---
@@ -34,7 +32,6 @@ All Firebase client credentials must be provided using standard Vite environment
 | :--- | :--- | :--- | :--- |
 | `VITE_FIREBASE_API_KEY` | Yes | Google Cloud / Firebase Web API key | `AIzaSyB...` |
 | `VITE_FIREBASE_AUTH_DOMAIN` | Yes | Firebase Authentication handler domain | `hris-client-admin-dev.firebaseapp.com` |
-| `VITE_FIREBASE_DATABASE_URL` | Yes | Realtime Database instance URL | `https://hris-client-admin-dev-default-rtdb.firebaseio.com` |
 | `VITE_FIREBASE_PROJECT_ID` | Yes | Google Cloud / Firebase Project ID | `hris-client-admin-dev` |
 | `VITE_FIREBASE_STORAGE_BUCKET` | Yes | Cloud Storage default bucket | `hris-client-admin-dev.appspot.com` |
 | `VITE_FIREBASE_MESSAGING_SENDER_ID` | Yes | Cloud Messaging Sender ID | `123456789012` |
@@ -101,7 +98,6 @@ import {
   firebaseClient,
   getFirebaseApp,
   getFirebaseAuth,
-  getFirebaseDatabase,
   getFirebaseStorage,
   isFirebaseReady,
 } from '@/services/firebase';
@@ -113,24 +109,24 @@ console.log('Firebase ready status:', status.isReady);
 
 ### Lifecycle States
 1. **`unconfigured`**: Missing environment variables. The SDK does not initialize; all service getters return `null`. The UI displays informative unconfigured notices without crashing.
-2. **`ready`**: Valid environment variables loaded. `FirebaseApp`, `Auth`, `Database`, and `FirebaseStorage` are fully initialized.
+2. **`ready`**: Valid environment variables loaded. `FirebaseApp`, `Auth`, and `FirebaseStorage` are fully initialized.
 3. **`error`**: Initialization threw an error (e.g., invalid API key format). Error message is captured and logged safely without leaking sensitive information.
 
 ---
 
 ## 6. Service Boundaries
 
-Service boundaries wrap Firebase SDK operations behind domain-specific abstractions:
+Service boundaries wrap SDK operations behind domain-specific abstractions:
 
 ### 6.1 Authentication (`src/services/auth`)
 - Interface: `AuthService` (`signInWithEmail`, `signOut`, `sendPasswordResetEmail`, `onAuthStateChanged`, `isConfigured`)
 - Direct accessor: `getFirebaseAuth()`
 - UI components consume `useAuth()` or `authService`, never `firebase/auth` directly.
 
-### 6.2 Realtime Database (`src/services/database`)
-- Interface: `DatabaseService` (`get`, `set`, `update`, `remove`, `push`, `subscribe`, `buildTenantPath`, `isConfigured`)
-- Direct accessor: `getFirebaseDatabase()`
-- Enforces strict multi-tenant path prefixes: `organizations/{organizationId}/{resource}/{entityId}`.
+### 6.2 Backend REST API (`src/services/api`)
+- Centralized Axios client: `apiClient` (`get`, `post`, `put`, `patch`, `delete`)
+- Automatic Firebase ID Token resolution and `Authorization: Bearer <token>` injection on every outbound request.
+- Manages organizational entities: companies, employees, departments, locations, roles, memberships, invitations.
 
 ### 6.3 Storage (`src/services/storage`)
 - Interface: `StorageService` (`uploadFile`, `getDownloadUrl`, `deleteFile`, `buildTenantStoragePath`, `isConfigured`)

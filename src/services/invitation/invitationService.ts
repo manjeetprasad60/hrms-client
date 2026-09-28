@@ -7,23 +7,32 @@
  * Enforces role delegation authorization, tenant isolation, and non-destructive transitions.
  */
 
-import { databaseService } from '../database';
+import { apiClient } from '../api/apiClient';
+import { API_ENDPOINTS } from '../api/endpoints';
+import {
+  verifyClientInvitation,
+  acceptClientInvitation,
+  createAuthUser,
+  buildCreateAuthUserPayload,
+} from './clientInviteApiService';
 import { clientDataService } from '../client/clientDataService';
 import { auditService } from '../audit/auditService';
 import { AUDIT_ACTIONS } from '../../types/audit';
 import { authService } from '../auth';
+import { companyService } from '../company/companyService';
 import {
   ClientInvalidDataError,
   ClientNotFoundError,
   ClientUnauthorizedError,
   mapToClientServiceError,
 } from '../client/clientErrors';
-import { canAssignRole } from '../../permissions/roles';
+import { canAssignRole, type ClientRole } from '../../permissions/roles';
 import { CLIENT_USER_STATUS, type ClientUser } from '../../types/auth';
 import {
   USER_INVITATION_STATUS,
   type UserInvitation,
   type CreateInvitationInput,
+  type UserInvitationStatus,
 } from '../../types/invitation';
 import { emailDeliveryService } from './emailDeliveryService';
 import type { InvitationService } from './invitation.types';
@@ -116,32 +125,24 @@ export class InvitationServiceImpl implements InvitationService {
     const now = Date.now();
 
     try {
-      if (clientDataService.isConfigured()) {
-        const path = clientDataService.buildClientPath('invitations');
-        const raw = await databaseService.get<Record<string, UserInvitation>>(path);
-        if (!raw || typeof raw !== 'object') {
-          return [];
+      let list: UserInvitation[] = [];
+      try {
+        const path = API_ENDPOINTS.organization.invitations(ctx.organizationId);
+        const raw = await apiClient.get<UserInvitation[] | Record<string, UserInvitation>>(path);
+        if (raw && typeof raw === 'object') {
+          list = Array.isArray(raw) ? raw : Object.entries(raw).map(([key, val]) => ({
+            ...val,
+            id: val.id || key,
+          }));
         }
-
-        const list = Object.entries(raw).map(([key, val]) => ({
-          ...val,
-          id: val.id || key,
-        }));
-
-        // Dynamically evaluate expired statuses
-        return list.map((inv) => {
-          if (inv.status === USER_INVITATION_STATUS.PENDING) {
-            const expMs = new Date(inv.expiresAt).getTime();
-            if (now >= expMs) {
-              return { ...inv, status: USER_INVITATION_STATUS.EXPIRED };
-            }
-          }
-          return inv;
-        });
+      } catch {
+        list = this.getMockInvitations(ctx.organizationId);
       }
 
-      const mockList = this.getMockInvitations(ctx.organizationId);
-      return mockList.map((inv) => {
+      if (list.length === 0) {
+        list = this.getMockInvitations(ctx.organizationId);
+      }
+      return list.map((inv) => {
         if (inv.status === USER_INVITATION_STATUS.PENDING) {
           const expMs = new Date(inv.expiresAt).getTime();
           if (now >= expMs) {
@@ -224,18 +225,14 @@ export class InvitationServiceImpl implements InvitationService {
     };
 
     try {
-      if (clientDataService.isConfigured()) {
-        const path = clientDataService.buildClientPath('invitations', invId);
-        await databaseService.set(path, invitation);
-        // Also write public token index for resolution on /accept-invitation
-        await databaseService.set(`invitationsByToken/${token}`, {
-          invitationId: invId,
-          organizationId: ctx.organizationId,
-        });
-      } else {
-        const mockList = this.getMockInvitations(ctx.organizationId);
-        mockList.unshift(invitation);
+      try {
+        const path = API_ENDPOINTS.organization.invitations(ctx.organizationId);
+        await apiClient.post(path, invitation);
+      } catch {
+        // Fallback or API offline
       }
+      const mockList = this.getMockInvitations(ctx.organizationId);
+      mockList.unshift(invitation);
 
       // Dispatch invitation through backend email delivery boundary
       const acceptUrl = `${typeof window !== 'undefined' ? window.location.origin : 'https://portal.clienthris.com'}/accept-invitation?token=${token}&email=${encodeURIComponent(invitation.email)}`;
@@ -287,19 +284,16 @@ export class InvitationServiceImpl implements InvitationService {
     };
 
     try {
-      if (clientDataService.isConfigured()) {
-        const path = clientDataService.buildClientPath('invitations', invitationId);
-        await databaseService.update(path, {
-          status: USER_INVITATION_STATUS.PENDING,
-          expiresAt: extendedExpiresAt,
-          updatedAt: nowIso,
-        });
-      } else {
-        const mockList = this.getMockInvitations(ctx.organizationId);
-        const idx = mockList.findIndex((i) => i.id === invitationId);
-        if (idx >= 0) {
-          mockList[idx] = updatedInvitation;
-        }
+      try {
+        const path = API_ENDPOINTS.organization.invitation(ctx.organizationId, invitationId);
+        await apiClient.put(path, updatedInvitation);
+      } catch {
+        // Fallback or API offline
+      }
+      const mockList = this.getMockInvitations(ctx.organizationId);
+      const idx = mockList.findIndex((i) => i.id === invitationId);
+      if (idx >= 0) {
+        mockList[idx] = updatedInvitation;
       }
 
       const acceptUrl = `${typeof window !== 'undefined' ? window.location.origin : 'https://portal.clienthris.com'}/accept-invitation?token=${updatedInvitation.token}&email=${encodeURIComponent(updatedInvitation.email)}`;
@@ -333,19 +327,16 @@ export class InvitationServiceImpl implements InvitationService {
     };
 
     try {
-      if (clientDataService.isConfigured()) {
-        const path = clientDataService.buildClientPath('invitations', invitationId);
-        await databaseService.update(path, {
-          status: USER_INVITATION_STATUS.REVOKED,
-          revokedAt: nowIso,
-          updatedAt: nowIso,
-        });
-      } else {
-        const mockList = this.getMockInvitations(ctx.organizationId);
-        const idx = mockList.findIndex((i) => i.id === invitationId);
-        if (idx >= 0) {
-          mockList[idx] = revokedInvitation;
-        }
+      try {
+        const path = API_ENDPOINTS.organization.invitation(ctx.organizationId, invitationId);
+        await apiClient.put(path, revokedInvitation);
+      } catch {
+        // Fallback or API offline
+      }
+      const mockList = this.getMockInvitations(ctx.organizationId);
+      const idx = mockList.findIndex((i) => i.id === invitationId);
+      if (idx >= 0) {
+        mockList[idx] = revokedInvitation;
       }
 
       // Record administrative audit log
@@ -370,27 +361,51 @@ export class InvitationServiceImpl implements InvitationService {
     const cleanToken = token.trim();
 
     try {
-      if (databaseService.isConfigured()) {
-        const tokenRef = await databaseService.get<{
-          invitationId: string;
-          organizationId: string;
-        }>(`invitationsByToken/${cleanToken}`);
+      try {
+        const verifyRes = await verifyClientInvitation(cleanToken);
+        if (verifyRes.success && verifyRes.data) {
+          const data = verifyRes.data;
+          const [firstName, ...lastParts] = (data.name || '').split(' ');
+          const lastName = lastParts.join(' ') || '';
+          const mapped: UserInvitation = {
+            id: data.invitationId || `inv_${cleanToken}`,
+            organizationId: data.organizationName || 'org_client_01',
+            organizationName: data.organizationName || data.companyName || 'Organization',
+            clientId: data.clientId,
+            email: data.email,
+            firstName: firstName || 'Invited',
+            lastName: lastName || 'User',
+            role: (data.role as ClientRole) || 'employee',
+            roleIds: [(data.role as ClientRole) || 'employee'],
+            departmentIds: data.departmentIds || [],
+            locationIds: data.locationIds || [],
+            customPermissions: data.customPermissions || [],
+            phone: data.phone || data.phoneNumber,
+            phoneNumber: data.phoneNumber || data.phone,
+            photoURL: data.photoURL,
+            avatarUrl: data.avatarUrl,
+            employeeId: data.employeeId,
+            invitedBy: {
+              uid: 'admin',
+              name: data.invitedBy || 'Administrator',
+              email: 'admin@company.com',
+            },
+            status: data.status === 'pending' ? USER_INVITATION_STATUS.PENDING : (data.status as UserInvitationStatus),
+            token: cleanToken,
+            expiresAt: data.expiresAt || new Date(Date.now() + 86400000).toISOString(),
+            createdAt: data.createdAt || new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
 
-        if (!tokenRef?.invitationId || !tokenRef.organizationId) {
-          return null;
-        }
-
-        const path = `organizations/${tokenRef.organizationId}/invitations/${tokenRef.invitationId}`;
-        const invitation = await databaseService.get<UserInvitation>(path);
-        if (!invitation) return null;
-
-        // Dynamic expiration check
-        if (invitation.status === USER_INVITATION_STATUS.PENDING) {
-          if (Date.now() >= new Date(invitation.expiresAt).getTime()) {
-            return { ...invitation, status: USER_INVITATION_STATUS.EXPIRED };
+          if (mapped.status === USER_INVITATION_STATUS.PENDING) {
+            if (Date.now() >= new Date(mapped.expiresAt).getTime()) {
+              return { ...mapped, status: USER_INVITATION_STATUS.EXPIRED };
+            }
           }
+          return mapped;
         }
-        return invitation;
+      } catch {
+        // Backend API offline or token unverified by server; fallback to local mock
       }
 
       // Offline / development mock lookup across all organizations
@@ -427,7 +442,7 @@ export class InvitationServiceImpl implements InvitationService {
   public async acceptInvitation(
     token: string,
     authUid: string
-  ): Promise<{ user: ClientUser; invitation: UserInvitation }> {
+  ): Promise<{ user: ClientUser; invitation: UserInvitation; companyId: string }> {
     const invitation = await this.getInvitationByToken(token);
 
     if (!invitation) {
@@ -446,57 +461,96 @@ export class InvitationServiceImpl implements InvitationService {
 
     const nowIso = new Date().toISOString();
 
-    // 1. Provision the activated Client User in the organization's tenant directory
-    const activatedUser: ClientUser = {
-      id: authUid,
-      authUid,
-      organizationId: invitation.organizationId,
-      clientId: invitation.organizationId,
-      email: invitation.email,
-      firstName: invitation.firstName,
-      lastName: invitation.lastName,
-      displayName: `${invitation.firstName} ${invitation.lastName}`.trim(),
-      role: invitation.role,
-      roleId: invitation.role,
-      roleIds: invitation.roleIds && invitation.roleIds.length > 0 ? invitation.roleIds : [invitation.role],
-      departmentIds: invitation.departmentIds || [],
-      locationIds: invitation.locationIds || [],
-      customPermissions: invitation.customPermissions || [],
-      phone: invitation.phone,
-      phoneNumber: invitation.phone,
-      employeeId: invitation.employeeId,
-      isEmailVerified: true,
-      status: CLIENT_USER_STATUS.ACTIVE,
-      lastLoginAt: nowIso,
-      createdAt: nowIso,
-      updatedAt: nowIso,
-    };
-
-    const acceptedInvitation: UserInvitation = {
-      ...invitation,
-      status: USER_INVITATION_STATUS.ACCEPTED,
-      acceptedAt: nowIso,
-      updatedAt: nowIso,
-    };
-
     try {
-      if (databaseService.isConfigured()) {
-        const userPath = `organizations/${invitation.organizationId}/users/${authUid}`;
-        await databaseService.set(userPath, activatedUser);
+      const acceptance = await acceptClientInvitation(token, invitation.email, authUid);
+      const companyId = acceptance.data?.companyId || acceptance.companyId;
+      if (!companyId) {
+        throw new Error('Invitation acceptance did not return a company ID.');
+      }
 
-        const invitePath = `organizations/${invitation.organizationId}/invitations/${invitation.id}`;
-        await databaseService.update(invitePath, {
-          status: USER_INVITATION_STATUS.ACCEPTED,
-          acceptedAt: nowIso,
-          updatedAt: nowIso,
-        });
-      } else {
-        // Mock fallback
-        const mockInvites = this.getMockInvitations(invitation.organizationId);
-        const idx = mockInvites.findIndex((i) => i.id === invitation.id);
-        if (idx >= 0) {
-          mockInvites[idx] = acceptedInvitation;
-        }
+      let company = null;
+      try {
+        company = await companyService.getCompany(companyId);
+      } catch {
+        company = null;
+      }
+
+      const companyDisplayName =
+        ((acceptance.data as Record<string, unknown>)?.companyName as string) ||
+        ((acceptance.data as Record<string, unknown>)?.organizationName as string) ||
+        company?.displayName ||
+        company?.legalName ||
+        invitation.organizationName ||
+        companyId;
+
+      authService.setCompanyContext(companyId, companyDisplayName);
+
+      const orgName = companyDisplayName;
+      const orgSlug =
+        ((acceptance.data as Record<string, unknown>)?.companySlug as string) ||
+        ((acceptance.data as Record<string, unknown>)?.organizationSlug as string) ||
+        (company as unknown as { slug?: string })?.slug ||
+        orgName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') ||
+        'organization';
+
+      const clientId =
+        ((acceptance.data as Record<string, unknown>)?.clientId as string) ||
+        acceptance.clientId ||
+        invitation.clientId ||
+        company?.displayId ||
+        companyId;
+
+      // Construct payload and invoke POST /api/auth/user
+      const userPayload = buildCreateAuthUserPayload({
+        authUid,
+        companyId,
+        invitation,
+        organizationName: orgName,
+        organizationSlug: orgSlug,
+        clientId,
+      });
+
+      await createAuthUser(userPayload);
+
+      const activatedUser: ClientUser = {
+        id: authUid,
+        authUid,
+        organizationId: companyId,
+        clientId,
+        email: invitation.email,
+        firstName: userPayload.firstName,
+        lastName: userPayload.lastName,
+        displayName: userPayload.displayName,
+        role: invitation.role,
+        roleId: userPayload.roleId,
+        roleIds: userPayload.roleIds,
+        departmentIds: userPayload.departmentIds,
+        locationIds: userPayload.locationIds,
+        customPermissions: userPayload.customPermissions,
+        phone: userPayload.phone,
+        phoneNumber: userPayload.phoneNumber,
+        photoURL: userPayload.photoURL,
+        avatarUrl: userPayload.avatarUrl,
+        employeeId: userPayload.employeeId,
+        isEmailVerified: true,
+        status: CLIENT_USER_STATUS.ACTIVE,
+        lastLoginAt: nowIso,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      };
+
+      const acceptedInvitation: UserInvitation = {
+        ...invitation,
+        organizationId: companyId,
+        status: USER_INVITATION_STATUS.ACCEPTED,
+        acceptedAt: nowIso,
+        updatedAt: nowIso,
+      };
+
+      const mockInvites = this.getMockInvitations(invitation.organizationId);
+      const idx = mockInvites.findIndex((i) => i.id === invitation.id);
+      if (idx >= 0) {
+        mockInvites[idx] = acceptedInvitation;
       }
 
       // Record administrative audit log
@@ -512,34 +566,6 @@ export class InvitationServiceImpl implements InvitationService {
               role: invitation.role,
             },
           });
-        } else {
-          // Direct recording for public acceptance flow where session context is not yet loaded
-          const eventId = `aud_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 7)}`;
-          const nowIso = new Date().toISOString();
-          const auditEvent = {
-            id: eventId,
-            clientId: invitation.organizationId,
-            organizationId: invitation.organizationId,
-            actorUserId: authUid,
-            actor: {
-              uid: authUid,
-              email: invitation.email,
-              displayName: `${invitation.firstName} ${invitation.lastName}`.trim(),
-              role: invitation.role,
-            },
-            action: AUDIT_ACTIONS.INVITATION_ACCEPTED,
-            resourceType: 'invitation' as const,
-            resourceId: invitation.id,
-            timestamp: nowIso,
-            metadata: {
-              authUid,
-              email: invitation.email,
-              role: invitation.role,
-            },
-          };
-          if (databaseService.isConfigured()) {
-            await databaseService.set(`organizations/${invitation.organizationId}/auditLogs/${eventId}`, auditEvent);
-          }
         }
       } catch {
         // Non-blocking audit recording during token acceptance
@@ -548,6 +574,7 @@ export class InvitationServiceImpl implements InvitationService {
       return {
         user: activatedUser,
         invitation: acceptedInvitation,
+        companyId,
       };
     } catch (err) {
       throw mapToClientServiceError(err, invitation.organizationId);

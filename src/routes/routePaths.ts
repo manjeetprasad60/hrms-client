@@ -5,6 +5,12 @@
  */
 
 export const ROUTE_PATHS = {
+  DEPARTMENTS: '/departments',
+  LOCATIONS: '/locations',
+  DOCUMENTS: '/documents',
+  SUBSCRIPTION: '/subscription',
+  ACTIVITY: '/activity',
+  ADMINISTRATORS: '/administrators',
   ROOT: '/',
   LOGIN: '/login',
   FORGOT_PASSWORD: '/forgot-password',

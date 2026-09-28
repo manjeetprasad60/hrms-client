@@ -10,7 +10,6 @@ import { authService } from '../../../services/auth/authService';
 import { invitationService } from '../../../services/invitation/invitationService';
 import {
   verifyClientInvitation,
-  acceptClientInvitation,
   type BackendInvitationData,
   type InviteApiError,
 } from '../../../services/invitation/clientInviteApiService';
@@ -228,17 +227,22 @@ export const ClientInviteLandingPage: React.FC = () => {
   useEffect(() => {
     let isMounted = true;
 
+    const handleInvalidInvitation = (message: string, type: 'expired' | 'revoked' | 'accepted' | 'invalid' | 'network') => {
+      queueMicrotask(() => {
+        if (!isMounted) return;
+        setErrorMessage(message);
+        setErrorType(type);
+        setStep('error');
+      });
+    };
+
     if (!token.trim()) {
-      setErrorMessage('No invitation token was provided. Please check the link from your invitation email.');
-      setErrorType('invalid');
-      setStep('error');
+      handleInvalidInvitation('No invitation token was provided. Please check the link from your invitation email.', 'invalid');
       return;
     }
 
     if (!email.trim()) {
-      setErrorMessage('No email address was provided in the invitation link. Please check the link from your invitation email.');
-      setErrorType('invalid');
-      setStep('error');
+      handleInvalidInvitation('No email address was provided in the invitation link. Please check the link from your invitation email.', 'invalid');
       return;
     }
 
@@ -374,19 +378,8 @@ export const ClientInviteLandingPage: React.FC = () => {
         // 1. Create Firebase Auth account
         const session = await authService.signUpWithInvitation(inviteData.email, password);
 
-        // 2. Activate the tenant ClientUser record via local invitation service
-        try {
-          await invitationService.acceptInvitation(token, session.user.id);
-        } catch {
-          // Non-blocking: the backend acceptance below is authoritative
-        }
-
-        // 3. Notify the backend API
-        try {
-          await acceptClientInvitation(token, inviteData.email, session.user.id);
-        } catch {
-          // Non-blocking: account is already created in Firebase
-        }
+        // 2. Accept the invitation and establish the returned company context
+        await invitationService.acceptInvitation(token, session.user.id);
 
         setStep('success');
 

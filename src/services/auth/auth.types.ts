@@ -74,6 +74,11 @@ export interface AuthService {
   getAuthStatus(): AuthStatus;
 
   /**
+   * Sets the active tenant context after invitation acceptance.
+   */
+  setCompanyContext(companyId: string, companyName: string): void;
+
+  /**
    * Subscribes to authentication state transitions.
    * Returns unsubscribe cleanup function.
    */

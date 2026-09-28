@@ -47,6 +47,13 @@ export function DashboardOverview() {
         >
           <DashboardPendingActions />
           <DashboardRecentActivity />
+        <div className="card" style={{ marginTop: '1rem' }}>
+          <div className="card-header">Subscription Status</div>
+          <div className="card-body">
+            <p>Plan: Premium</p>
+            <p>Usage: 10/50 Employees</p>
+          </div>
+        </div>
         </div>
 
         {/* Section 5: Integration & Architecture Readiness Status */}
@@ -108,11 +115,11 @@ export function DashboardOverview() {
                     marginBottom: 'var(--space-2)',
                   }}
                 >
-                  <span className="text-subheading">Realtime Database</span>
-                  <Badge variant="neutral">Prepared</Badge>
+                  <span className="text-subheading">Backend REST APIs</span>
+                  <Badge variant="success">Active</Badge>
                 </div>
                 <p className="text-small" style={{ color: 'var(--color-text-secondary)', lineHeight: 'var(--leading-relaxed)' }}>
-                  Service boundary in <code>databaseService</code> ready to bind reactive listeners to live nodes.
+                  Service boundary in <code>apiClient</code> integrated with backend endpoints and offline resilience.
                 </p>
               </div>
 

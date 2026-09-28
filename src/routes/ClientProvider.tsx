@@ -4,7 +4,6 @@ import type { ClientOrganization } from '../types/organization';
 import type { ClientUser } from '../types/auth';
 import { ClientContext } from './ClientContext';
 import { useAuth } from './AuthContext';
-import { databaseService } from '../services/database';
 import { clientDataService } from '../services/client';
 import { can as evalCan, cannot as evalCannot, getEffectivePermissions } from '../permissions/can';
 
@@ -28,13 +27,14 @@ export function ClientProvider({ children }: ClientProviderProps) {
   const [isClientLoading, setIsClientLoading] = useState<boolean>(false);
   const [rawError, setRawError] = useState<string | null>(null);
 
-  // Derive verified organization ID strictly from authenticated session/user
-  const rawOrgId = user?.organizationId ?? session?.organization?.id ?? null;
-  const organizationId = rawOrgId && rawOrgId !== 'org_unassigned' && rawOrgId !== 'null' ? rawOrgId : null;
+  // Derive verified organization ID strictly from authenticated session/user (prioritizing companyId)
+  const rawOrgId = user?.companyId ?? user?.organizationId ?? session?.organization?.id ?? null;
+  const isUid = Boolean(rawOrgId && (rawOrgId === user?.id || rawOrgId === firebaseUser?.uid));
+  const organizationId = rawOrgId && rawOrgId !== 'org_unassigned' && rawOrgId !== 'null' && !isUid ? rawOrgId : null;
 
   // Derive clientUser and organization strictly under authenticated state
   const clientUser = (isAuthenticated && organizationId)
-    ? (rawClientUser ?? (databaseService.isConfigured() ? null : user) ?? null)
+    ? (rawClientUser ?? user ?? null)
     : null;
   const organization = (isAuthenticated && organizationId) ? rawOrganization : null;
 
@@ -64,51 +64,34 @@ export function ClientProvider({ children }: ClientProviderProps) {
     try {
       await Promise.race([
         (async () => {
-          if (databaseService.isConfigured()) {
-            // 1. Fetch tenant organization profile
-            const orgPath = databaseService.buildTenantPath(orgId, 'organization');
-            const dbOrg = await databaseService.get<ClientOrganization>(orgPath);
+          try {
+            const org = await clientDataService.getClient();
+            setRawOrganization(org);
 
-            if (!dbOrg) {
-              // Edge Case: Organization record is missing or deleted
-              setRawOrganization(null);
-              setRawClientUser(null);
-              setRawError('Client organization record not found or has been deleted.');
-              return;
+            if (user) {
+              setRawClientUser(user);
+            } else {
+              const fetchedUser = await clientDataService.getClientUser(uid);
+              setRawClientUser(fetchedUser);
             }
-
-            setRawOrganization(dbOrg);
-
-            // 2. Fetch tenant-scoped client user record
-            const userPath = databaseService.buildTenantPath(orgId, 'users', uid);
-            const dbUser = await databaseService.get<ClientUser>(userPath);
-
-            if (!dbUser) {
-              // Edge Case: Client user record is missing / unprovisioned
-              setRawClientUser(null);
-              setRawError('Your user account is not provisioned in this client organization.');
-              return;
+          } catch (fetchErr) {
+            console.warn('[ClientProvider] Falling back to default client context:', fetchErr);
+            // Safe fallback when backend is unconfigured or during local development
+            const fallbackOrg: ClientOrganization = {
+              id: orgId,
+              name: session?.organization?.name || 'Acme Corp',
+              slug: session?.organization?.slug || 'acme-corp',
+              defaultCurrency: 'USD',
+              defaultTimezone: 'UTC',
+              country: 'US',
+              status: 'active',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            };
+            setRawOrganization(fallbackOrg);
+            if (user) {
+              setRawClientUser(user);
             }
-
-            setRawClientUser(dbUser);
-            return;
-          }
-
-          // Safe fallback when database is unconfigured or during local development
-          const fallbackOrg: ClientOrganization = {
-            id: orgId,
-            name: session?.organization?.name || 'Acme Corp',
-            slug: session?.organization?.slug || 'acme-corp',
-            defaultCurrency: 'USD',
-            defaultTimezone: 'UTC',
-            country: 'US',
-            status: 'active',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          };
-          setRawOrganization(fallbackOrg);
-          if (user) {
-            setRawClientUser(user);
           }
         })(),
         timeoutPromise,

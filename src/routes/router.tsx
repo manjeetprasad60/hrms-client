@@ -10,6 +10,13 @@ import { LoginPage } from '../features/auth/pages/LoginPage';
 import { ForgotPasswordPage } from '../features/auth/pages/ForgotPasswordPage';
 import { AcceptInvitationPage } from '../features/auth/pages/AcceptInvitationPage';
 import { ClientInviteLandingPage } from '../features/auth/pages/ClientInviteLandingPage';
+import { EmployeeManagementPage } from '../features/employees';
+import { DepartmentManagementPage } from '../features/departments';
+import { LocationManagementPage } from '../features/locations';
+import { DocumentManagementPage } from '../features/documents';
+import { SubscriptionPage } from '../features/subscription';
+import { ActivityPage } from '../features/activity';
+import { AdministratorManagementPage } from '../features/administrators';
 import { DashboardOverview } from '../features/dashboard/components/DashboardOverview';
 import { OrganizationProfilePage } from '../features/organization';
 import { SettingsPage } from '../features/settings';
@@ -59,7 +66,7 @@ export const router = createBrowserRouter([
     path: ROUTE_PATHS.ACCEPT_INVITATION,
     errorElement: <RouteErrorBoundary />,
     element: (
-      <PublicRoute>
+      <PublicRoute allowInvitation>
         <AuthLayout title="Accept Invitation | HRIS Client Portal" subtitle="Account Setup">
           <AcceptInvitationPage />
         </AuthLayout>
@@ -100,20 +107,60 @@ export const router = createBrowserRouter([
           </PermissionRoute>
         ),
       },
+      
       {
         path: ROUTE_PATHS.EMPLOYEES,
         element: (
           <PermissionRoute requiredPermission={PERMISSIONS.EMPLOYEES_VIEW}>
-            <PageContainer
-              title="Employee Directory"
-              description="Manage organizational staff, profiles, and employment status."
-              breadcrumbs={[{ label: 'Employees' }]}
-            >
-              <EmptyState
-                title="Employee Directory"
-                description="Staff listing, employee onboarding, profiles, and organizational charts."
-              />
-            </PageContainer>
+            <EmployeeManagementPage />
+          </PermissionRoute>
+        ),
+      },
+      {
+        path: ROUTE_PATHS.DEPARTMENTS,
+        element: (
+          <PermissionRoute requiredPermission={PERMISSIONS.EMPLOYEES_VIEW}>
+            <DepartmentManagementPage />
+          </PermissionRoute>
+        ),
+      },
+      {
+        path: ROUTE_PATHS.LOCATIONS,
+        element: (
+          <PermissionRoute requiredPermission={PERMISSIONS.EMPLOYEES_VIEW}>
+            <LocationManagementPage />
+          </PermissionRoute>
+        ),
+      },
+      {
+        path: ROUTE_PATHS.DOCUMENTS,
+        element: (
+          <PermissionRoute requiredPermission={PERMISSIONS.DOCUMENTS_VIEW}>
+            <DocumentManagementPage />
+          </PermissionRoute>
+        ),
+      },
+      {
+        path: ROUTE_PATHS.SUBSCRIPTION,
+        element: (
+          <PermissionRoute requiredPermission={PERMISSIONS.SUBSCRIPTION_VIEW}>
+            <SubscriptionPage />
+          </PermissionRoute>
+        ),
+      },
+      {
+        path: ROUTE_PATHS.ACTIVITY,
+        element: (
+          <PermissionRoute requiredPermission={PERMISSIONS.ACTIVITY_VIEW}>
+            <ActivityPage />
+          </PermissionRoute>
+        ),
+      },
+      {
+        path: ROUTE_PATHS.ADMINISTRATORS,
+        element: (
+          <PermissionRoute requiredPermission={PERMISSIONS.ADMINISTRATORS_VIEW}>
+            <AdministratorManagementPage />
           </PermissionRoute>
         ),
       },

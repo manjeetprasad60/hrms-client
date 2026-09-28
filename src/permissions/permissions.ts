@@ -14,6 +14,14 @@
 import { RESOURCES, ACTIONS } from './resources';
 
 export const PERMISSIONS = {
+  DOCUMENTS_VIEW: 'documents:view',
+  DOCUMENTS_UPLOAD: 'documents:upload',
+  DOCUMENTS_DELETE: 'documents:delete',
+  SUBSCRIPTION_VIEW: 'subscription:view',
+  ACTIVITY_VIEW: 'activity:view',
+  ADMINISTRATORS_VIEW: 'administrators:view',
+  ADMINISTRATORS_INVITE: 'administrators:invite',
+  ADMINISTRATORS_MANAGE: 'administrators:manage',
   // Dashboard
   DASHBOARD_VIEW: `${RESOURCES.DASHBOARD}.${ACTIONS.VIEW}` as const,
 

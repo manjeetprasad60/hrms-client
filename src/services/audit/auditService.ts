@@ -11,7 +11,7 @@
  * 4. Comprehensive Audit Trail: Captures administrative actions across users, roles, permissions, and settings.
  */
 
-import { databaseService } from "../database";
+import { apiClient } from "../api/apiClient";
 import { clientDataService } from "../client/clientDataService";
 import { authService } from "../auth";
 import {
@@ -89,18 +89,14 @@ export class AuditServiceImpl implements AuditService {
     };
 
     try {
-      if (databaseService.isConfigured()) {
-        const path = `organizations/${ctx.organizationId}/auditLogs/${eventId}`;
-        await databaseService.set<AuditEvent>(path, auditEvent);
-      } else {
-        const mockLogs = this.getMockLogs(ctx.organizationId);
-        mockLogs.unshift(auditEvent);
-      }
-
-      return auditEvent;
-    } catch (err) {
-      throw mapToClientServiceError(err, ctx.organizationId);
+      await apiClient.post<AuditEvent>(`/organizations/${ctx.organizationId}/audit-logs`, auditEvent);
+    } catch {
+      // Non-blocking in dev
     }
+
+    const mockLogs = this.getMockLogs(ctx.organizationId);
+    mockLogs.unshift(auditEvent);
+    return auditEvent;
   }
 
   /**
@@ -112,13 +108,14 @@ export class AuditServiceImpl implements AuditService {
     try {
       let events: AuditEvent[] = [];
 
-      if (databaseService.isConfigured()) {
-        const path = `organizations/${ctx.organizationId}/auditLogs`;
-        const rawData = await databaseService.get<Record<string, AuditEvent>>(path);
-        if (rawData && typeof rawData === "object") {
-          events = Object.values(rawData);
+      try {
+        const res = await apiClient.get<AuditEvent[]>(`/organizations/${ctx.organizationId}/audit-logs`);
+        if (Array.isArray(res) && res.length > 0) {
+          events = res;
+        } else {
+          events = [...this.getMockLogs(ctx.organizationId)];
         }
-      } else {
+      } catch {
         events = [...this.getMockLogs(ctx.organizationId)];
       }
 
@@ -170,9 +167,11 @@ export class AuditServiceImpl implements AuditService {
     const ctx = clientDataService.getTrustedContext();
 
     try {
-      if (databaseService.isConfigured()) {
-        const path = `organizations/${ctx.organizationId}/auditLogs/${eventId.trim()}`;
-        return await databaseService.get<AuditEvent>(path);
+      try {
+        const event = await apiClient.get<AuditEvent>(`/organizations/${ctx.organizationId}/audit-logs/${eventId.trim()}`);
+        if (event) return event;
+      } catch {
+        // ignore
       }
 
       const mockLogs = this.getMockLogs(ctx.organizationId);

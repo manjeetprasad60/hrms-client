@@ -15,7 +15,6 @@ import { env } from './env';
 export interface FirebaseWebConfig {
   readonly apiKey: string;
   readonly authDomain: string;
-  readonly databaseURL: string;
   readonly projectId: string;
   readonly storageBucket: string;
   readonly messagingSenderId: string;
@@ -56,9 +55,6 @@ export function checkFirebaseConfig(): FirebaseConfigStatus {
   if (firebase.authDomain) configured.push('authDomain');
   else missing.push('VITE_FIREBASE_AUTH_DOMAIN');
 
-  if (firebase.databaseURL) configured.push('databaseURL');
-  else missing.push('VITE_FIREBASE_DATABASE_URL');
-
   if (firebase.projectId) configured.push('projectId');
   else missing.push('VITE_FIREBASE_PROJECT_ID');
 
@@ -85,14 +81,12 @@ export function getFirebaseWebConfig(): FirebaseWebConfig {
   return {
     // apiKey: env.firebase.apiKey,
     // authDomain: env.firebase.authDomain,
-    // databaseURL: env.firebase.databaseURL,
     // projectId: env.firebase.projectId,
     // storageBucket: env.firebase.storageBucket,
     // messagingSenderId: env.firebase.messagingSenderId,
     // appId: env.firebase.appId,
     apiKey: "AIzaSyDShEsogN3H7pfzHo2q5SpN7BYcPkN-wTo",
     authDomain: "resale-30022.firebaseapp.com",
-    databaseURL: "https://resale-30022-default-rtdb.firebaseio.com",
     projectId: "resale-30022",
     storageBucket: "resale-30022.firebasestorage.app",
     messagingSenderId: "562470665",

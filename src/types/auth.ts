@@ -15,6 +15,7 @@ export interface ClientUser {
   readonly authUid: string;
   readonly organizationId: string;
   readonly clientId?: string;
+  readonly companyId?: string;
   readonly email: string;
   readonly firstName: string;
   readonly lastName: string;

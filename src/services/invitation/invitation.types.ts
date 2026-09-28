@@ -50,5 +50,9 @@ export interface InvitationService {
    * Completes the account setup flow: activates the ClientUser record
    * and transitions the invitation status to 'accepted'.
    */
-  acceptInvitation(token: string, authUid: string): Promise<{ user: ClientUser; invitation: UserInvitation }>;
+  acceptInvitation(token: string, authUid: string): Promise<{
+    user: ClientUser;
+    invitation: UserInvitation;
+    companyId: string;
+  }>;
 }

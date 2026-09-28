@@ -12,7 +12,6 @@ import type { ClientRole } from '../../permissions/roles';
 import type { ClientUser, ClientUserStatus, CreateClientUserInput, UpdateClientUserInput } from '../../types/auth';
 import type { ClientOrganization } from '../../types/organization';
 import type { ClientSettings } from '../../types/settings';
-import type { DatabaseQueryOptions } from '../database/database.types';
 import type { StorageUploadOptions, StorageUploadResult } from '../storage/storage.types';
 
 export interface TrustedClientContext {
@@ -145,8 +144,7 @@ export interface ClientDataService {
   subscribe<T>(
     resource: string,
     callback: (data: T | null) => void,
-    entityId?: string,
-    queryOptions?: DatabaseQueryOptions
+    entityId?: string
   ): () => void;
 
   /**

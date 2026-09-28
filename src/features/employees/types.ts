@@ -1,0 +1,1 @@
+export interface EmployeeFilter { search: string; status: string; department: string; employmentType: string; }
