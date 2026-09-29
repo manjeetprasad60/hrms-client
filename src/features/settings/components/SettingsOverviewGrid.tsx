@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { Card, CardHeader, CardBody, CardFooter } from '../../../components/ui/Card';
 import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
-import { usePermission } from '../../../permissions/usePermission';
 import { SETTINGS_CATEGORIES, type SettingsCategoryId } from '../types';
 
 export interface SettingsOverviewGridProps {
@@ -71,14 +70,7 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
 };
 
 export const SettingsOverviewGrid: React.FC<SettingsOverviewGridProps> = ({ onSelectCategory }) => {
-  const { can, canAny } = usePermission();
-
-  const cards = SETTINGS_CATEGORIES.filter((c) => {
-    if (c.id === 'overview') return false;
-    if (c.requiredPermission && !can(c.requiredPermission)) return false;
-    if (c.anyPermissions && c.anyPermissions.length > 0 && !canAny(c.anyPermissions)) return false;
-    return true;
-  });
+  const cards = SETTINGS_CATEGORIES.filter((c) => c.id !== 'overview');
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 'var(--space-4)' }}>

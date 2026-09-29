@@ -5,7 +5,6 @@ import { AuthLayout } from '../layouts/AuthLayout';
 import { PageContainer } from '../layouts/PageContainer';
 import { ProtectedRoute } from './ProtectedRoute';
 import { PublicRoute } from './PublicRoute';
-import { PermissionRoute } from './PermissionRoute';
 import { LoginPage } from '../features/auth/pages/LoginPage';
 import { ForgotPasswordPage } from '../features/auth/pages/ForgotPasswordPage';
 import { AcceptInvitationPage } from '../features/auth/pages/AcceptInvitationPage';
@@ -25,7 +24,6 @@ import { RoleManagementPage } from '../features/roles';
 import { NotFoundPage } from './NotFoundPage';
 import { EmptyState } from '../components/feedback/EmptyState';
 import { RouteErrorBoundary } from '../components/feedback/ErrorBoundary';
-import { PERMISSIONS } from '../permissions/permissions';
 
 /**
  * Client Admin Web Central Router
@@ -101,101 +99,64 @@ export const router = createBrowserRouter([
       },
       {
         path: ROUTE_PATHS.DASHBOARD,
-        element: (
-          <PermissionRoute requiredPermission={PERMISSIONS.DASHBOARD_VIEW}>
-            <DashboardOverview />
-          </PermissionRoute>
-        ),
+        element: <DashboardOverview />,
       },
-      
       {
         path: ROUTE_PATHS.EMPLOYEES,
-        element: (
-          <PermissionRoute requiredPermission={PERMISSIONS.EMPLOYEES_VIEW}>
-            <EmployeeManagementPage />
-          </PermissionRoute>
-        ),
+        element: <EmployeeManagementPage />,
       },
       {
         path: ROUTE_PATHS.DEPARTMENTS,
-        element: (
-          <PermissionRoute requiredPermission={PERMISSIONS.EMPLOYEES_VIEW}>
-            <DepartmentManagementPage />
-          </PermissionRoute>
-        ),
+        element: <DepartmentManagementPage />,
       },
       {
         path: ROUTE_PATHS.LOCATIONS,
-        element: (
-          <PermissionRoute requiredPermission={PERMISSIONS.EMPLOYEES_VIEW}>
-            <LocationManagementPage />
-          </PermissionRoute>
-        ),
+        element: <LocationManagementPage />,
       },
       {
         path: ROUTE_PATHS.DOCUMENTS,
-        element: (
-          <PermissionRoute requiredPermission={PERMISSIONS.DOCUMENTS_VIEW}>
-            <DocumentManagementPage />
-          </PermissionRoute>
-        ),
+        element: <DocumentManagementPage />,
       },
       {
         path: ROUTE_PATHS.SUBSCRIPTION,
-        element: (
-          <PermissionRoute requiredPermission={PERMISSIONS.SUBSCRIPTION_VIEW}>
-            <SubscriptionPage />
-          </PermissionRoute>
-        ),
+        element: <SubscriptionPage />,
       },
       {
         path: ROUTE_PATHS.ACTIVITY,
-        element: (
-          <PermissionRoute requiredPermission={PERMISSIONS.ACTIVITY_VIEW}>
-            <ActivityPage />
-          </PermissionRoute>
-        ),
+        element: <ActivityPage />,
       },
       {
         path: ROUTE_PATHS.ADMINISTRATORS,
-        element: (
-          <PermissionRoute requiredPermission={PERMISSIONS.ADMINISTRATORS_VIEW}>
-            <AdministratorManagementPage />
-          </PermissionRoute>
-        ),
+        element: <AdministratorManagementPage />,
       },
       {
         path: ROUTE_PATHS.ATTENDANCE,
         element: (
-          <PermissionRoute requiredPermission={PERMISSIONS.ATTENDANCE_VIEW}>
-            <PageContainer
-              title="Time & Attendance"
-              description="Review employee check-ins, work logs, and timesheet records."
-              breadcrumbs={[{ label: 'Attendance' }]}
-            >
-              <EmptyState
-                title="Attendance Tracking"
-                description="Daily attendance logs, shift scheduling, and timesheet approvals."
-              />
-            </PageContainer>
-          </PermissionRoute>
+          <PageContainer
+            title="Time & Attendance"
+            description="Review employee check-ins, work logs, and timesheet records."
+            breadcrumbs={[{ label: 'Attendance' }]}
+          >
+            <EmptyState
+              title="Attendance Tracking"
+              description="Daily attendance logs, shift scheduling, and timesheet approvals."
+            />
+          </PageContainer>
         ),
       },
       {
         path: ROUTE_PATHS.LEAVE,
         element: (
-          <PermissionRoute requiredPermission={PERMISSIONS.LEAVE_VIEW}>
-            <PageContainer
-              title="Leave Management"
-              description="Track time-off policies, leave balances, and pending approvals."
-              breadcrumbs={[{ label: 'Leave' }]}
-            >
-              <EmptyState
-                title="Leave & Time-Off"
-                description="Leave applications, team calendars, and entitlement balances."
-              />
-            </PageContainer>
-          </PermissionRoute>
+          <PageContainer
+            title="Leave Management"
+            description="Track time-off policies, leave balances, and pending approvals."
+            breadcrumbs={[{ label: 'Leave' }]}
+          >
+            <EmptyState
+              title="Leave & Time-Off"
+              description="Leave applications, team calendars, and entitlement balances."
+            />
+          </PageContainer>
         ),
       },
       {
@@ -205,95 +166,70 @@ export const router = createBrowserRouter([
       {
         path: ROUTE_PATHS.PAYROLL,
         element: (
-          <PermissionRoute requiredPermission={PERMISSIONS.PAYROLL_VIEW}>
-            <PageContainer
-              title="Payroll Operations"
-              description="Process salary disbursements, tax deductions, and pay runs."
-              breadcrumbs={[{ label: 'Payroll' }]}
-            >
-              <EmptyState
-                title="Payroll Management"
-                description="Salary structures, payslip generation, deductions, and tax compliance."
-              />
-            </PageContainer>
-          </PermissionRoute>
+          <PageContainer
+            title="Payroll Operations"
+            description="Process salary disbursements, tax deductions, and pay runs."
+            breadcrumbs={[{ label: 'Payroll' }]}
+          >
+            <EmptyState
+              title="Payroll Management"
+              description="Salary structures, payslip generation, deductions, and tax compliance."
+            />
+          </PageContainer>
         ),
       },
       {
         path: ROUTE_PATHS.RECRUITMENT,
         element: (
-          <PermissionRoute requiredPermission={PERMISSIONS.RECRUITMENT_VIEW}>
-            <PageContainer
-              title="Recruitment & Hiring"
-              description="Track job requisitions, candidate pipelines, and offers."
-              breadcrumbs={[{ label: 'Recruitment' }]}
-            >
-              <EmptyState
-                title="Recruitment Pipeline"
-                description="Job vacancies, applicant tracking, and interview scheduling."
-              />
-            </PageContainer>
-          </PermissionRoute>
+          <PageContainer
+            title="Recruitment & Hiring"
+            description="Track job requisitions, candidate pipelines, and offers."
+            breadcrumbs={[{ label: 'Recruitment' }]}
+          >
+            <EmptyState
+              title="Recruitment Pipeline"
+              description="Job vacancies, applicant tracking, and interview scheduling."
+            />
+          </PageContainer>
         ),
       },
       {
         path: ROUTE_PATHS.PERFORMANCE,
         element: (
-          <PermissionRoute requiredPermission={PERMISSIONS.PERFORMANCE_VIEW}>
-            <PageContainer
-              title="Performance Management"
-              description="Employee appraisals, goal tracking, and review cycles."
-              breadcrumbs={[{ label: 'Performance' }]}
-            >
-              <EmptyState
-                title="Performance & Reviews"
-                description="Quarterly appraisals, KPI tracking, and 360-degree feedback."
-              />
-            </PageContainer>
-          </PermissionRoute>
+          <PageContainer
+            title="Performance Management"
+            description="Employee appraisals, goal tracking, and review cycles."
+            breadcrumbs={[{ label: 'Performance' }]}
+          >
+            <EmptyState
+              title="Performance & Reviews"
+              description="Quarterly appraisals, KPI tracking, and 360-degree feedback."
+            />
+          </PageContainer>
         ),
       },
       {
         path: ROUTE_PATHS.REPORTS,
         element: (
-          <PermissionRoute requiredPermission={PERMISSIONS.REPORTS_VIEW}>
-            <PageContainer
-              title="Analytics & Reports"
-              description="Generate workforce analytics, headcount reports, and audit summaries."
-              breadcrumbs={[{ label: 'Reports' }]}
-            >
-              <EmptyState
-                title="HR Analytics & Reports"
-                description="Headcount metrics, turnover reports, and exportable compliance logs."
-              />
-            </PageContainer>
-          </PermissionRoute>
+          <PageContainer
+            title="Analytics & Reports"
+            description="Generate workforce analytics, headcount reports, and audit summaries."
+            breadcrumbs={[{ label: 'Reports' }]}
+          >
+            <EmptyState
+              title="HR Analytics & Reports"
+              description="Headcount metrics, turnover reports, and exportable compliance logs."
+            />
+          </PageContainer>
         ),
       },
       {
         path: ROUTE_PATHS.SETTINGS,
-        element: (
-          <PermissionRoute
-            requiredPermission={PERMISSIONS.SETTINGS_MANAGE}
-            anyPermissions={[
-              PERMISSIONS.SETTINGS_VIEW,
-              PERMISSIONS.SETTINGS_MANAGE,
-              PERMISSIONS.ORGANIZATION_VIEW,
-              PERMISSIONS.USERS_VIEW,
-              PERMISSIONS.ROLES_VIEW,
-            ]}
-          >
-            <SettingsPage />
-          </PermissionRoute>
-        ),
+        element: <SettingsPage />,
       },
       {
         path: ROUTE_PATHS.SETTINGS_ORGANIZATION,
-        element: (
-          <PermissionRoute requiredPermission={PERMISSIONS.ORGANIZATION_VIEW}>
-            <OrganizationProfilePage />
-          </PermissionRoute>
-        ),
+        element: <OrganizationProfilePage />,
       },
       {
         path: 'organization',
@@ -301,11 +237,7 @@ export const router = createBrowserRouter([
       },
       {
         path: ROUTE_PATHS.SETTINGS_USERS,
-        element: (
-          <PermissionRoute requiredPermission={PERMISSIONS.USERS_VIEW}>
-            <UserManagementPage />
-          </PermissionRoute>
-        ),
+        element: <UserManagementPage />,
       },
       {
         path: 'users',
@@ -313,11 +245,7 @@ export const router = createBrowserRouter([
       },
       {
         path: ROUTE_PATHS.SETTINGS_ROLES,
-        element: (
-          <PermissionRoute requiredPermission={PERMISSIONS.ROLES_VIEW}>
-            <RoleManagementPage />
-          </PermissionRoute>
-        ),
+        element: <RoleManagementPage />,
       },
       {
         path: 'roles',

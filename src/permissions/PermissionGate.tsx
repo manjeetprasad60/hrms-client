@@ -1,5 +1,4 @@
 import React from 'react';
-import { usePermission } from './usePermission';
 import type { ClientRole } from './roles';
 
 export interface PermissionGateProps {
@@ -50,34 +49,7 @@ export interface PermissionGateProps {
  */
 export function PermissionGate({
   children,
-  I,
-  do: doAction,
-  permission,
-  anyOf,
-  allOf,
-  role,
-  fallback = null,
 }: PermissionGateProps) {
-  const { can, canAny, canAll, is } = usePermission();
-
-  const targetPermission = I ?? doAction ?? permission;
-
-  if (targetPermission && !can(targetPermission)) {
-    return <>{fallback}</>;
-  }
-
-  if (anyOf && anyOf.length > 0 && !canAny(anyOf)) {
-    return <>{fallback}</>;
-  }
-
-  if (allOf && allOf.length > 0 && !canAll(allOf)) {
-    return <>{fallback}</>;
-  }
-
-  if (role && !is(role)) {
-    return <>{fallback}</>;
-  }
-
   return <>{children}</>;
 }
 

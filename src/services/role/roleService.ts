@@ -20,17 +20,13 @@ import {
   mapToClientServiceError,
 } from '../client/clientErrors';
 import {
-  CLIENT_ROLES,
   SYSTEM_ROLES,
   isSystemRole,
   getSystemRoleByCode,
   getSystemRoleById,
-  validateRolePermissionsSubset,
 } from '../../permissions/roles';
 import { PERMISSIONS, type PermissionKey } from '../../permissions/permissions';
 import {
-  can as evalCan,
-  getEffectivePermissions,
   registerDynamicRole,
   unregisterDynamicRole,
 } from '../../permissions/can';
@@ -189,15 +185,7 @@ export class RoleServiceImpl implements RoleService {
     const ctx = clientDataService.getTrustedContext();
     const session = authService.getCurrentSession();
 
-    // 1. Permission check: creator must have ROLES_MANAGE or be ORG_ADMIN
-    if (ctx.role !== CLIENT_ROLES.ORG_ADMIN && !evalCan(ctx.role, PERMISSIONS.ROLES_MANAGE, ctx.customPermissions)) {
-      throw new ClientUnauthorizedError(
-        'You do not have permission to create organizational roles.',
-        ctx.organizationId
-      );
-    }
-
-    // 2. Validate role name and description
+    // 1. Validate role name and description
     const name = input.name?.trim();
     if (!name || name.length < 2) {
       throw new ClientInvalidDataError('A descriptive role name is required (minimum 2 characters).');
@@ -215,26 +203,13 @@ export class RoleServiceImpl implements RoleService {
       throw new ClientInvalidDataError(`A role with the name "${name}" already exists in this organization.`);
     }
 
-    // 3. Permission IDs
+    // 2. Permission IDs
     const permissionIds = input.permissionIds && input.permissionIds.length > 0
       ? input.permissionIds
       : (input.permissions as readonly PermissionKey[]) || [];
 
     if (!permissionIds || permissionIds.length === 0) {
       throw new ClientInvalidDataError('A role must grant at least one permission.');
-    }
-
-    // 4. Anti-Privilege Escalation Check:
-    // Unless actor is ORG_ADMIN, creator cannot grant permissions they do not possess.
-    if (ctx.role !== CLIENT_ROLES.ORG_ADMIN) {
-      const actorPerms = getEffectivePermissions(ctx.role, ctx.customPermissions);
-      const isAllowed = validateRolePermissionsSubset(permissionIds, actorPerms);
-      if (!isAllowed) {
-        throw new ClientUnauthorizedError(
-          'Privilege escalation violation: You cannot create a role with permissions that exceed your own active permissions.',
-          ctx.organizationId
-        );
-      }
     }
 
     // 5. Generate slug code and unique ID
@@ -321,26 +296,7 @@ export class RoleServiceImpl implements RoleService {
       throw new ClientNotFoundError(`Custom role "${roleId}" was not found in this organization.`, ctx.organizationId);
     }
 
-    // 3. Permission check
-    if (ctx.role !== CLIENT_ROLES.ORG_ADMIN && !evalCan(ctx.role, PERMISSIONS.ROLES_MANAGE, ctx.customPermissions)) {
-      throw new ClientUnauthorizedError(
-        'You do not have permission to modify organizational roles.',
-        ctx.organizationId
-      );
-    }
-
-    // 4. Anti-Privilege Escalation Check on new permissions
     const updatedPerms = updates.permissionIds || (updates.permissions as readonly PermissionKey[]);
-    if (updatedPerms && updatedPerms.length > 0 && ctx.role !== CLIENT_ROLES.ORG_ADMIN) {
-      const actorPerms = getEffectivePermissions(ctx.role, ctx.customPermissions);
-      const isAllowed = validateRolePermissionsSubset(updatedPerms, actorPerms);
-      if (!isAllowed) {
-        throw new ClientUnauthorizedError(
-          'Privilege escalation violation: You cannot grant permissions that exceed your own active permissions.',
-          ctx.organizationId
-        );
-      }
-    }
 
     const nowIso = new Date().toISOString();
     const merged: Role = {
@@ -420,14 +376,6 @@ export class RoleServiceImpl implements RoleService {
     const existing = await this.getRoleById(roleId);
     if (!existing || existing.isSystemRole) {
       throw new ClientNotFoundError(`Custom role "${roleId}" was not found.`, ctx.organizationId);
-    }
-
-    // 3. Permission check
-    if (ctx.role !== CLIENT_ROLES.ORG_ADMIN && !evalCan(ctx.role, PERMISSIONS.ROLES_MANAGE, ctx.customPermissions)) {
-      throw new ClientUnauthorizedError(
-        'You do not have permission to delete organizational roles.',
-        ctx.organizationId
-      );
     }
 
     // 4. Safe Deletion: Ensure no active user is currently assigned to this role

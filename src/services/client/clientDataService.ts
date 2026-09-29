@@ -24,12 +24,7 @@ import type {
 import { CLIENT_USER_STATUS } from '../../types/user';
 import {
   CLIENT_ROLES,
-  SYSTEM_ROLE_PERMISSIONS,
-  canActorAssignRole,
-  type ClientRole,
 } from '../../permissions/roles';
-import { getEffectivePermissions } from '../../permissions/can';
-import { roleService } from '../role/roleService';
 import { auditService } from '../audit/auditService';
 import { AUDIT_ACTIONS } from '../../types/audit';
 import type { ClientSettings } from '../../types/settings';
@@ -340,7 +335,6 @@ export class ClientDataServiceImpl implements ClientDataService {
     }
 
     // Strip immutable primary keys and control-plane fields from client-submitted payload
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { id: _ignoredId, createdAt: _ignoredCreatedAt, status: _ignoredStatus, ...sanitizedUpdates } = updates;
 
     const payload: Partial<ClientOrganization> = {
@@ -471,32 +465,6 @@ export class ClientDataServiceImpl implements ClientDataService {
       throw new ClientInvalidDataError('A valid client role is required.');
     }
 
-    // Anti-Privilege Escalation Check for new user role assignment
-    if (ctx.role !== CLIENT_ROLES.ORG_ADMIN) {
-      let targetPermissions: readonly string[];
-      if (input.role in SYSTEM_ROLE_PERMISSIONS) {
-        targetPermissions = SYSTEM_ROLE_PERMISSIONS[input.role as ClientRole] || [];
-      } else {
-        const customRole = await roleService.getRoleByCode(input.role);
-        targetPermissions = customRole?.permissionIds || customRole?.permissions || [];
-      }
-
-      const actorPerms = getEffectivePermissions(ctx.role, ctx.customPermissions);
-      const isAuthorized = canActorAssignRole(
-        ctx.role,
-        actorPerms,
-        input.role,
-        targetPermissions
-      );
-
-      if (!isAuthorized) {
-        throw new ClientUnauthorizedError(
-          `Privilege escalation violation: You are not authorized to assign the role "${input.role}".`,
-          ctx.organizationId
-        );
-      }
-    }
-
     const email = input.email.trim().toLowerCase();
     const existingUsers = await this.listClientUsers();
     if (existingUsers.some((u) => u.email.toLowerCase() === email)) {
@@ -552,7 +520,6 @@ export class ClientDataServiceImpl implements ClientDataService {
     const existingUser = await this.getClientUser(targetUid);
 
     // Strip immutable primary keys from client-supplied updates
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { id: _ignoredId, authUid: _ignoredAuthUid, organizationId: _ignoredOrgId, clientId: _ignoredClientId, createdAt: _ignoredCreatedAt, ...sanitizedUpdates } = updates as Partial<ClientUser>;
 
     const firstName = sanitizedUpdates.firstName ?? existingUser.firstName;
@@ -561,8 +528,6 @@ export class ClientDataServiceImpl implements ClientDataService {
 
     // 1. Role Change Security Enforcements
     if (sanitizedUpdates.role && sanitizedUpdates.role !== existingUser.role) {
-      const targetRoleCode = sanitizedUpdates.role;
-
       // Sole Administrator Lockout Protection:
       // Prevent demoting or reassigning the only remaining active org_admin
       if (existingUser.role === CLIENT_ROLES.ORG_ADMIN) {
@@ -578,32 +543,6 @@ export class ClientDataServiceImpl implements ClientDataService {
         ) {
           throw new ClientInvalidDataError(
             'Cannot reassign the organization\'s sole administrator. Promote another administrator before reassigning this user.'
-          );
-        }
-      }
-
-      // Anti-Privilege Escalation Protection:
-      if (ctx.role !== CLIENT_ROLES.ORG_ADMIN) {
-        let targetPermissions: readonly string[];
-        if (targetRoleCode in SYSTEM_ROLE_PERMISSIONS) {
-          targetPermissions = SYSTEM_ROLE_PERMISSIONS[targetRoleCode as ClientRole] || [];
-        } else {
-          const customRole = await roleService.getRoleByCode(targetRoleCode);
-          targetPermissions = customRole?.permissionIds || customRole?.permissions || [];
-        }
-
-        const actorPerms = getEffectivePermissions(ctx.role, ctx.customPermissions);
-        const isAuthorized = canActorAssignRole(
-          ctx.role,
-          actorPerms,
-          targetRoleCode,
-          targetPermissions
-        );
-
-        if (!isAuthorized) {
-          throw new ClientUnauthorizedError(
-            `Privilege escalation violation: You are not authorized to assign the role "${targetRoleCode}".`,
-            ctx.organizationId
           );
         }
       }
@@ -791,7 +730,6 @@ export class ClientDataServiceImpl implements ClientDataService {
     }
 
     // Strip immutable primary keys from client-submitted payload
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { organizationId: _ignoredOrgId, ...sanitizedSettings } = settings;
 
     const payload: Partial<ClientSettings> = {

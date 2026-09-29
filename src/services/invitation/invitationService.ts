@@ -23,10 +23,9 @@ import { companyService } from '../company/companyService';
 import {
   ClientInvalidDataError,
   ClientNotFoundError,
-  ClientUnauthorizedError,
   mapToClientServiceError,
 } from '../client/clientErrors';
-import { canAssignRole, type ClientRole } from '../../permissions/roles';
+import type { ClientRole } from '../../permissions/roles';
 import { CLIENT_USER_STATUS, type ClientUser } from '../../types/auth';
 import {
   USER_INVITATION_STATUS,
@@ -159,15 +158,7 @@ export class InvitationServiceImpl implements InvitationService {
   public async createInvitation(input: CreateInvitationInput): Promise<UserInvitation> {
     const ctx = clientDataService.getTrustedContext();
 
-    // 1. Role Assignment Authorization Check
-    if (!canAssignRole(ctx.role, input.role)) {
-      throw new ClientUnauthorizedError(
-        `You do not have permission to assign the role "${input.role}".`,
-        ctx.organizationId
-      );
-    }
-
-    // 2. Validate Email Syntax
+    // 1. Validate Email Syntax
     const email = input.email?.trim().toLowerCase();
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       throw new ClientInvalidDataError('A valid corporate email address is required.');

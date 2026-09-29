@@ -6,9 +6,8 @@ import { Button } from '../../../components/ui/Button';
 import { Alert } from '../../../components/ui/Alert';
 import { Avatar } from '../../../components/ui/Avatar';
 import { Badge } from '../../../components/ui/Badge';
-import { CLIENT_ROLES, canActorAssignRole, type ClientRole } from '../../../permissions/roles';
+import { CLIENT_ROLES, type ClientRole } from '../../../permissions/roles';
 import { roleService } from '../../../services/role/roleService';
-import { useClient } from '../../../routes/ClientContext';
 import type { Role } from '../../../types/role';
 import { CLIENT_USER_STATUS, type ClientUser, type ClientUserStatus, type UpdateClientUserInput } from '../../../types/auth';
 
@@ -33,7 +32,6 @@ const UserDetailDialogContent: React.FC<UserDetailDialogContentProps> = ({
   onSave,
   isSaving = false,
 }) => {
-  const { role: actorRole, permissions: actorPermissions } = useClient();
   const [availableRoles, setAvailableRoles] = useState<readonly Role[]>([]);
 
   useEffect(() => {
@@ -52,8 +50,6 @@ const UserDetailDialogContent: React.FC<UserDetailDialogContentProps> = ({
     };
   }, []);
 
-  const actorEffectivePerms = useMemo(() => actorPermissions || [], [actorPermissions]);
-
   const roleOptions = useMemo(() => {
     if (availableRoles.length === 0) {
       return [
@@ -64,17 +60,11 @@ const UserDetailDialogContent: React.FC<UserDetailDialogContentProps> = ({
         { value: CLIENT_ROLES.ORG_ADMIN, label: 'Organization Admin' },
       ];
     }
-    return availableRoles
-      .filter((r) => {
-        if (r.code === user.role) return true;
-        const rolePerms = r.permissionIds || r.permissions || [];
-        return canActorAssignRole(actorRole, actorEffectivePerms, r.code, rolePerms);
-      })
-      .map((r) => ({
-        value: r.code,
-        label: `${r.name}${r.isSystemRole ? '' : ' (Custom)'}`,
-      }));
-  }, [availableRoles, actorRole, actorEffectivePerms, user.role]);
+    return availableRoles.map((r) => ({
+      value: r.code,
+      label: `${r.name}${r.isSystemRole ? '' : ' (Custom)'}`,
+    }));
+  }, [availableRoles]);
 
   const [firstName, setFirstName] = useState(user.firstName || '');
   const [lastName, setLastName] = useState(user.lastName || '');

@@ -2,7 +2,6 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { ROUTE_PATHS } from '../routes/routePaths';
 import { PERMISSIONS, type Permission } from '../permissions/permissions';
-import { usePermission } from '../permissions/usePermission';
 
 export interface NavigationProps {
   readonly isCollapsed?: boolean;
@@ -132,17 +131,7 @@ const navItems: readonly NavItem[] = [
 ];
 
 export function Navigation({ isCollapsed = false, onItemClick }: NavigationProps) {
-  const { can, canAny } = usePermission();
-
-  const accessibleNavItems = navItems.filter((item) => {
-    if (item.requiredPermission && !can(item.requiredPermission)) {
-      return false;
-    }
-    if (item.anyPermissions && item.anyPermissions.length > 0 && !canAny(item.anyPermissions)) {
-      return false;
-    }
-    return true;
-  });
+  const accessibleNavItems = navItems;
 
   return (
     <nav

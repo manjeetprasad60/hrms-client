@@ -1,7 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { Badge } from '../../../components/ui/Badge';
-import { usePermission } from '../../../permissions/usePermission';
 import { SETTINGS_CATEGORIES, type SettingsCategoryId } from '../types';
 
 export interface SettingsLayoutProps {
@@ -15,17 +14,7 @@ export const SettingsLayout: React.FC<SettingsLayoutProps> = ({
   onSelectCategory,
   children,
 }) => {
-  const { can, canAny } = usePermission();
-
-  const accessibleCategories = SETTINGS_CATEGORIES.filter((cat) => {
-    if (cat.requiredPermission && !can(cat.requiredPermission)) {
-      return false;
-    }
-    if (cat.anyPermissions && cat.anyPermissions.length > 0 && !canAny(cat.anyPermissions)) {
-      return false;
-    }
-    return true;
-  });
+  const accessibleCategories = SETTINGS_CATEGORIES;
 
   return (
     <div

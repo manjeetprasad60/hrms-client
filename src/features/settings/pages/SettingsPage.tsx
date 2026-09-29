@@ -3,12 +3,9 @@ import { useSearchParams, useBlocker } from 'react-router-dom';
 import { PageContainer } from '../../../layouts/PageContainer';
 import { AppLoading } from '../../../components/feedback/Loading/AppLoading';
 import { ErrorState } from '../../../components/feedback/ErrorState';
-import { PermissionDenied } from '../../../components/feedback/PermissionDenied';
 import { useToast } from '../../../components/feedback/ToastContext';
 import { useClient } from '../../../routes/ClientContext';
 import { useClientDataService } from '../../../services/client/useClientService';
-import { usePermission } from '../../../permissions/usePermission';
-import { PERMISSIONS } from '../../../permissions/permissions';
 import { ROUTE_PATHS } from '../../../routes/routePaths';
 import { SETTINGS_CATEGORIES, type SettingsCategoryId } from '../types';
 import { SettingsLayout } from '../components/SettingsLayout';
@@ -23,10 +20,9 @@ export const SettingsPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { organization, refreshClient } = useClient();
   const { getClientSettings, updateClientSettings } = useClientDataService();
-  const { can, canAny, role } = usePermission();
   const toast = useToast();
 
-  const canEdit = can(PERMISSIONS.SETTINGS_MANAGE);
+  const canEdit = true;
 
   const rawCat = searchParams.get('category') as SettingsCategoryId | null;
   const activeCategory: SettingsCategoryId =
@@ -168,13 +164,6 @@ export const SettingsPage: React.FC = () => {
 
   const selectedCategoryDef = SETTINGS_CATEGORIES.find((c) => c.id === activeCategory);
 
-  const isCategoryAuthorized =
-    !selectedCategoryDef ||
-    ((!selectedCategoryDef.requiredPermission || can(selectedCategoryDef.requiredPermission)) &&
-      (!selectedCategoryDef.anyPermissions ||
-        selectedCategoryDef.anyPermissions.length === 0 ||
-        canAny(selectedCategoryDef.anyPermissions)));
-
   return (
     <PageContainer
       title="Organization Settings"
@@ -187,54 +176,33 @@ export const SettingsPage: React.FC = () => {
       ]}
     >
       <SettingsLayout activeCategory={activeCategory} onSelectCategory={handleSelectCategory}>
-        {!isCategoryAuthorized ? (
-          <PermissionDenied
-            title={`${selectedCategoryDef?.shortTitle || 'Category'} Restricted`}
-            message="Your current organizational role does not have permission to view or manage this settings category."
-            requiredPermission={selectedCategoryDef?.requiredPermission || selectedCategoryDef?.anyPermissions?.[0]}
-            currentRole={role ?? undefined}
-            onReturnToDashboard={() => setSearchParams({ category: 'overview' })}
-            action={
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={() => setSearchParams({ category: 'overview' })}
-              >
-                View Settings Overview
-              </button>
-            }
+        {activeCategory === 'overview' && (
+          <SettingsOverviewGrid onSelectCategory={handleSelectCategory} />
+        )}
+
+        {activeCategory === 'localization' && (
+          <LocalizationSettingsForm
+            localization={settings.localization}
+            canEdit={canEdit}
+            isSaving={isSaving}
+            onSave={handleSaveLocalization}
+            onDirtyChange={setIsDirty}
           />
-        ) : (
-          <>
-            {activeCategory === 'overview' && (
-              <SettingsOverviewGrid onSelectCategory={handleSelectCategory} />
-            )}
+        )}
 
-            {activeCategory === 'localization' && (
-              <LocalizationSettingsForm
-                localization={settings.localization}
-                canEdit={canEdit}
-                isSaving={isSaving}
-                onSave={handleSaveLocalization}
-                onDirtyChange={setIsDirty}
-              />
-            )}
+        {activeCategory === 'branding' && (
+          <BrandingSettingsForm
+            branding={settings.branding}
+            companyName={organization?.name || 'Organization'}
+            canEdit={canEdit}
+            isSaving={isSaving}
+            onSave={handleSaveBranding}
+            onDirtyChange={setIsDirty}
+          />
+        )}
 
-            {activeCategory === 'branding' && (
-              <BrandingSettingsForm
-                branding={settings.branding}
-                companyName={organization?.name || 'Organization'}
-                canEdit={canEdit}
-                isSaving={isSaving}
-                onSave={handleSaveBranding}
-                onDirtyChange={setIsDirty}
-              />
-            )}
-
-            {selectedCategoryDef && !selectedCategoryDef.isImplemented && (
-              <UpcomingCategoryCard category={selectedCategoryDef} />
-            )}
-          </>
+        {selectedCategoryDef && !selectedCategoryDef.isImplemented && (
+          <UpcomingCategoryCard category={selectedCategoryDef} />
         )}
       </SettingsLayout>
 

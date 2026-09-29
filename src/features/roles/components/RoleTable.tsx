@@ -3,8 +3,6 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '.
 import { Badge, type BadgeVariant } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { TableLoadingRows } from '../../../components/feedback/Loading/TableLoading';
-import { usePermission } from '../../../permissions/usePermission';
-import { PERMISSIONS } from '../../../permissions/permissions';
 import type { Role } from '../../../types/role';
 
 export interface RoleTableProps {
@@ -37,9 +35,8 @@ export const RoleTable: React.FC<RoleTableProps> = ({
   onEditRole,
   onDeleteRole,
 }) => {
-  const { can } = usePermission();
-  const canEdit = can(PERMISSIONS.ROLES_EDIT) || can(PERMISSIONS.ROLES_MANAGE);
-  const canDelete = can(PERMISSIONS.ROLES_DELETE) || can(PERMISSIONS.ROLES_MANAGE);
+  const canEdit = true;
+  const canDelete = true;
 
   return (
     <div

@@ -5,7 +5,7 @@ import type { ClientUser } from '../types/auth';
 import { ClientContext } from './ClientContext';
 import { useAuth } from './AuthContext';
 import { clientDataService } from '../services/client';
-import { can as evalCan, cannot as evalCannot, getEffectivePermissions } from '../permissions/can';
+import { getEffectivePermissions } from '../permissions/can';
 
 export interface ClientProviderProps {
   readonly children: React.ReactNode;
@@ -166,8 +166,8 @@ export function ClientProvider({ children }: ClientProviderProps) {
     clientError,
     hasClient,
     isSuspended,
-    can: (permission: string) => evalCan(role, permission, customPermissions),
-    cannot: (permission: string) => evalCannot(role, permission, customPermissions),
+    can: (_permission: string) => true,
+    cannot: (_permission: string) => false,
     refreshClient,
     currency: organization?.defaultCurrency ?? organization?.currency ?? 'USD',
     timezone: organization?.defaultTimezone ?? organization?.timezone ?? 'UTC',
@@ -178,7 +178,6 @@ export function ClientProvider({ children }: ClientProviderProps) {
     organization,
     organizationId,
     role,
-    customPermissions,
     permissions,
     clientStatus,
     isClientLoading,

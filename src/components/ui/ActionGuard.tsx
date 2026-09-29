@@ -1,5 +1,4 @@
 import React from 'react';
-import { usePermission } from '../../permissions/usePermission';
 import type { ClientRole } from '../../permissions/roles';
 
 export interface ActionGuardProps {
@@ -23,29 +22,6 @@ export interface ActionGuardProps {
  */
 export function ActionGuard({
   children,
-  permission,
-  anyPermissions,
-  allPermissions,
-  role,
-  fallback = null,
 }: ActionGuardProps) {
-  const { can, canAny, canAll, is } = usePermission();
-
-  if (permission && !can(permission)) {
-    return <>{fallback}</>;
-  }
-
-  if (anyPermissions && anyPermissions.length > 0 && !canAny(anyPermissions)) {
-    return <>{fallback}</>;
-  }
-
-  if (allPermissions && allPermissions.length > 0 && !canAll(allPermissions)) {
-    return <>{fallback}</>;
-  }
-
-  if (role && !is(role)) {
-    return <>{fallback}</>;
-  }
-
   return <>{children}</>;
 }

@@ -1,6 +1,5 @@
 import React from 'react';
 import { Button, type ButtonProps } from './Button';
-import { usePermission } from '../../permissions/usePermission';
 
 export interface PermissionButtonProps extends ButtonProps {
   /**
@@ -41,54 +40,17 @@ export interface PermissionButtonProps extends ButtonProps {
 export const PermissionButton = React.forwardRef<HTMLButtonElement, PermissionButtonProps>(
   (
     {
-      permission,
-      anyPermissions,
-      allPermissions,
-      disableUnauthorized = false,
-      unauthorizedTooltip,
+      permission: _permission,
+      anyPermissions: _anyPermissions,
+      allPermissions: _allPermissions,
+      disableUnauthorized: _disableUnauthorized,
+      unauthorizedTooltip: _unauthorizedTooltip,
       disabled,
       title,
       ...buttonProps
     },
     ref
   ) => {
-    const { can, canAny, canAll } = usePermission();
-
-    let isAuthorized = true;
-
-    if (permission && !can(permission)) {
-      isAuthorized = false;
-    } else if (anyPermissions && anyPermissions.length > 0 && !canAny(anyPermissions)) {
-      isAuthorized = false;
-    } else if (allPermissions && allPermissions.length > 0 && !canAll(allPermissions)) {
-      isAuthorized = false;
-    }
-
-    if (!isAuthorized) {
-      if (!disableUnauthorized) {
-        return null;
-      }
-
-      const defaultTooltip = permission
-        ? `Permission required: ${permission}`
-        : 'You do not have permission to perform this action';
-
-      return (
-        <Button
-          ref={ref}
-          {...buttonProps}
-          disabled={true}
-          aria-disabled="true"
-          title={unauthorizedTooltip ?? defaultTooltip}
-          style={{
-            cursor: 'not-allowed',
-            opacity: 0.6,
-            ...buttonProps.style,
-          }}
-        />
-      );
-    }
-
     return <Button ref={ref} disabled={disabled} title={title} {...buttonProps} />;
   }
 );

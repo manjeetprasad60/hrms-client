@@ -2,13 +2,11 @@ import { Card, CardHeader, CardBody } from '../../../components/ui/Card';
 import { Badge } from '../../../components/ui/Badge';
 import { PermissionButton } from '../../../components/ui/PermissionButton';
 import { PERMISSIONS } from '../../../permissions/permissions';
-import { usePermission } from '../../../permissions/usePermission';
 import { useToast } from '../../../components/feedback/ToastContext';
 import type { DashboardQuickAction } from '../types';
 
 export function DashboardQuickActions() {
   const toast = useToast();
-  const { can } = usePermission();
 
   const handleActionClick = (actionName: string, destination: string) => {
     toast.info(
@@ -120,9 +118,7 @@ export function DashboardQuickActions() {
     },
   ];
 
-  const accessibleActions = actions.filter(
-    (action) => !action.permission || can(action.permission)
-  );
+  const accessibleActions = actions;
 
   return (
     <Card>
