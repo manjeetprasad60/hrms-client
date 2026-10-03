@@ -1,8 +1,10 @@
 export interface Employee {
   readonly id: string;
   readonly employeeId?: string;
-  readonly firstName: string;
-  readonly lastName: string;
+  readonly companyId?: string;
+  readonly name?: string;
+  readonly firstName?: string;
+  readonly lastName?: string;
   readonly email: string;
   readonly phone?: string;
   readonly department?: string;
@@ -11,8 +13,8 @@ export interface Employee {
   readonly jobTitle?: string;
   readonly location?: string;
   readonly locationId?: string;
-  readonly employmentType: 'full_time' | 'part_time' | 'contractor' | 'intern';
-  readonly status: 'active' | 'inactive' | 'on_leave' | 'probation' | 'terminated';
+  readonly employmentType?: 'full_time' | 'part_time' | 'contractor' | 'intern' | string;
+  readonly status?: 'active' | 'inactive' | 'on_leave' | 'probation' | 'terminated' | string;
   readonly salary?: number;
   readonly dateOfJoining?: number;
   readonly dateOfBirth?: string;
@@ -20,8 +22,33 @@ export interface Employee {
   readonly bloodGroup?: string;
   readonly emergencyContact?: { name: string; phone: string; relationship: string };
   readonly address?: { street?: string; city?: string; state?: string; zipCode?: string; country?: string };
-  readonly createdAt: number;
-  readonly updatedAt: number;
+  readonly createdAt?: number;
+  readonly updatedAt?: number;
   readonly createdBy?: string;
   readonly updatedBy?: string;
+  readonly [key: string]: unknown;
+}
+
+export interface CreateEmployeePayload {
+  readonly companyId: string;
+  readonly name: string;
+  readonly email: string;
+  readonly department: string;
+  readonly designation: string;
+  readonly status: string;
+  readonly firstName: string;
+  readonly lastName: string;
+  readonly [key: string]: unknown;
+}
+
+export interface UpdateEmployeePayload {
+  readonly companyId?: string;
+  readonly name?: string;
+  readonly email?: string;
+  readonly department?: string;
+  readonly designation?: string;
+  readonly status?: string;
+  readonly firstName?: string;
+  readonly lastName?: string;
+  readonly [key: string]: unknown;
 }

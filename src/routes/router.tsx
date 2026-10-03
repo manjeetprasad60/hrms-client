@@ -21,6 +21,8 @@ import { OrganizationProfilePage } from '../features/organization';
 import { SettingsPage } from '../features/settings';
 import { UserManagementPage } from '../features/users';
 import { RoleManagementPage } from '../features/roles';
+import { AttendanceManagementPage } from '../features/attendance';
+import { LeaveManagementPage } from '../features/leave';
 import { NotFoundPage } from './NotFoundPage';
 import { EmptyState } from '../components/feedback/EmptyState';
 import { RouteErrorBoundary } from '../components/feedback/ErrorBoundary';
@@ -131,33 +133,11 @@ export const router = createBrowserRouter([
       },
       {
         path: ROUTE_PATHS.ATTENDANCE,
-        element: (
-          <PageContainer
-            title="Time & Attendance"
-            description="Review employee check-ins, work logs, and timesheet records."
-            breadcrumbs={[{ label: 'Attendance' }]}
-          >
-            <EmptyState
-              title="Attendance Tracking"
-              description="Daily attendance logs, shift scheduling, and timesheet approvals."
-            />
-          </PageContainer>
-        ),
+        element: <AttendanceManagementPage />,
       },
       {
         path: ROUTE_PATHS.LEAVE,
-        element: (
-          <PageContainer
-            title="Leave Management"
-            description="Track time-off policies, leave balances, and pending approvals."
-            breadcrumbs={[{ label: 'Leave' }]}
-          >
-            <EmptyState
-              title="Leave & Time-Off"
-              description="Leave applications, team calendars, and entitlement balances."
-            />
-          </PageContainer>
-        ),
+        element: <LeaveManagementPage />,
       },
       {
         path: 'leaves',

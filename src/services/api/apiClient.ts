@@ -29,7 +29,9 @@ export class ApiError extends Error {
 async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
   const { body, params, headers, ...customConfig } = options;
 
-  let url = `${env.apiBaseUrl}${endpoint}`;
+  const base = env.apiBaseUrl.replace(/\/+$/, '');
+  const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  let url = `${base}${path}`;
   if (params) {
     const searchParams = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) {

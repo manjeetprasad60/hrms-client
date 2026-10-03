@@ -1,28 +1,66 @@
 import { apiClient } from '../api/apiClient';
 import { activityService } from '../activity/activityService';
-import type { Employee } from './employee.types';
+import type { Employee, CreateEmployeePayload, UpdateEmployeePayload } from './employee.types';
 
 type EmployeeCreateInput = Partial<Employee> & {
   readonly companyId?: string;
+  readonly name?: string;
   readonly firstName?: string;
   readonly lastName?: string;
   readonly email?: string;
 };
 
 class EmployeeServiceImpl {
+  /**
+   * Directly posts to /employees API endpoint
+   * curl --location 'http://localhost:5001/api/employees'
+   */
+  public async addEmployee(payload: CreateEmployeePayload): Promise<Employee> {
+    if (!payload.companyId) throw new Error('Company ID is required');
+    if (!payload.email) throw new Error('Employee email is required');
+
+    const res = await apiClient.post<Employee>('/employees', payload);
+
+    try {
+      await activityService.logActivity(payload.companyId, {
+        action: 'create_employee',
+        description: `Created employee ${payload.name || `${payload.firstName} ${payload.lastName}`}`,
+        performedBy: { userId: 'system' },
+        resourceType: 'employee',
+        resourceId: (res as { id?: string })?.id || `emp_${Date.now()}`,
+        metadata: { email: payload.email },
+        timestamp: Date.now(),
+      });
+    } catch {
+      // Activity logging non-blocking
+    }
+
+    return res;
+  }
+
   public async getEmployees(companyId: string): Promise<Employee[]> {
     if (!companyId) throw new Error('Company ID is required');
 
     try {
-      const employees = await apiClient.get<Record<string, Employee & { companyId?: string }> | (Employee & { companyId?: string })[]>(
-        `companies/${companyId}/employees`
-      );
+      const res = await apiClient.get<Record<string, Employee> | Employee[]>('/employees', {
+        params: { companyId },
+      });
 
-      if (!employees) return [];
-      if (Array.isArray(employees)) return employees;
-      return Object.values(employees);
-    } catch {
+      if (Array.isArray(res)) return res;
+      if (res && typeof res === 'object') return Object.values(res);
       return [];
+    } catch {
+      try {
+        const employees = await apiClient.get<Record<string, Employee & { companyId?: string }> | (Employee & { companyId?: string })[]>(
+          `companies/${companyId}/employees`
+        );
+
+        if (!employees) return [];
+        if (Array.isArray(employees)) return employees;
+        return Object.values(employees);
+      } catch {
+        return [];
+      }
     }
   }
 
@@ -31,8 +69,13 @@ class EmployeeServiceImpl {
     const companyId = typeof companyIdOrInput === 'string' ? companyIdOrInput : input.companyId ?? '';
 
     if (!companyId) throw new Error('Company ID is required');
-    if (!input.firstName?.trim()) throw new Error('Employee first name is required');
-    if (!input.lastName?.trim()) throw new Error('Employee last name is required');
+
+    const nameParts = (input.name || '').trim().split(/\s+/);
+    const resolvedFirstName = input.firstName?.trim() || nameParts[0] || '';
+    const resolvedLastName = input.lastName?.trim() || nameParts.slice(1).join(' ') || '';
+
+    if (!resolvedFirstName) throw new Error('Employee first name is required');
+    if (!resolvedLastName) throw new Error('Employee last name is required');
     if (!input.email?.trim()) throw new Error('Employee email is required');
 
     const email = input.email.trim().toLowerCase();
@@ -51,13 +94,15 @@ class EmployeeServiceImpl {
 
     const employeeId = `emp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
     const now = Date.now();
+    const fullName = input.name?.trim() || `${resolvedFirstName} ${resolvedLastName}`.trim();
 
     const employee: Employee & { companyId: string } = {
       id: employeeId,
       employeeId,
       companyId,
-      firstName: input.firstName.trim(),
-      lastName: input.lastName.trim(),
+      name: fullName,
+      firstName: resolvedFirstName,
+      lastName: resolvedLastName,
       email,
       phone: input.phone,
       department: input.department,
@@ -77,10 +122,25 @@ class EmployeeServiceImpl {
       updatedBy: input.updatedBy,
     };
 
+    const apiPayload: CreateEmployeePayload = {
+      companyId,
+      name: fullName,
+      email,
+      department: input.department || '',
+      designation: input.designation || '',
+      status: input.status || 'active',
+      firstName: resolvedFirstName,
+      lastName: resolvedLastName,
+    };
+
     try {
-      await apiClient.post(`companies/${companyId}/employees`, employee);
+      await apiClient.post('/employees', apiPayload);
     } catch {
-      // Non-blocking in dev
+      try {
+        await apiClient.post(`companies/${companyId}/employees`, employee);
+      } catch {
+        // Non-blocking in dev
+      }
     }
 
     await activityService.logActivity(companyId, {
@@ -96,35 +156,62 @@ class EmployeeServiceImpl {
     return employee;
   }
 
+  /**
+   * PUT /employees/{employeeId}
+   * curl -X PUT http://localhost:5001/api/employees/{employeeId} \
+   *   -H "Content-Type: application/json" \
+   *   -d '{"companyId": "...", "designation": "...", "status": "..."}'
+   */
   public async updateEmployee(
     companyId: string,
     employeeId: string,
-    updates: Partial<Employee & { companyId?: string }>
+    updates: UpdateEmployeePayload | Partial<Employee>
   ): Promise<Employee & { companyId?: string }> {
     if (!companyId || !employeeId) throw new Error('Company ID and Employee ID are required');
 
-    let existing: (Employee & { companyId?: string }) | undefined;
-    try {
-      existing = await apiClient.get<Employee & { companyId?: string }>(
-        `companies/${companyId}/employees/${employeeId}`
-      );
-    } catch {
-      // ignore
-    }
-
-    const updated = {
-      ...(existing ?? {}),
+    const payload: UpdateEmployeePayload = {
+      companyId: (updates.companyId as string) || companyId,
       ...updates,
-      id: employeeId,
-      companyId,
-      updatedAt: Date.now(),
-    } as Employee & { companyId?: string };
+    };
+
+    let updated: (Employee & { companyId?: string }) | undefined;
 
     try {
-      await apiClient.patch(`companies/${companyId}/employees/${employeeId}`, updated);
+      updated = await apiClient.put<Employee & { companyId?: string }>(`/employees/${employeeId}`, payload);
     } catch {
-      // Non-blocking in dev
+      try {
+        updated = await apiClient.patch<Employee & { companyId?: string }>(
+          `companies/${companyId}/employees/${employeeId}`,
+          payload
+        );
+      } catch {
+        // Non-blocking in dev
+      }
     }
+
+    if (!updated || typeof updated !== 'object') {
+      updated = {
+        id: employeeId,
+        companyId,
+        ...payload,
+        updatedAt: Date.now(),
+      } as Employee & { companyId: string };
+    }
+
+    try {
+      await activityService.logActivity(companyId, {
+        action: 'update_employee',
+        description: `Updated employee ${employeeId}`,
+        performedBy: { userId: 'system' },
+        resourceType: 'employee',
+        resourceId: employeeId,
+        metadata: { updates: payload },
+        timestamp: Date.now(),
+      });
+    } catch {
+      // Activity logging non-blocking
+    }
+
     return updated;
   }
 

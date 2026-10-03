@@ -12,3 +12,5 @@ export * from './tenant';
 export * from './client';
 export * from './invitation';
 export * from './audit';
+export * from './attendance';
+export * from './leave';

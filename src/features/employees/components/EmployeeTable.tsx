@@ -1,17 +1,17 @@
 import { Table, Badge } from '../../../components/ui';
+import type { Employee } from '../../../services/employee/employee.types';
 
-interface Employee {
-  id: string;
-  firstName?: string;
-  lastName?: string;
-  email?: string;
-  department?: string;
-  designation?: string;
-  status?: string;
-  [key: string]: unknown;
-}
+export type { Employee };
 
-export function EmployeeTable({ employees = [], onEdit, onView }: { employees?: Employee[]; onEdit: (e: Employee) => void; onView: (e: Employee) => void }) {
+export function EmployeeTable({
+  employees = [],
+  onEdit,
+  onView,
+}: {
+  readonly employees?: Employee[];
+  readonly onEdit: (e: Employee) => void;
+  readonly onView: (e: Employee) => void;
+}) {
   return (
     <div className="table-container">
       <Table>
@@ -26,19 +26,51 @@ export function EmployeeTable({ employees = [], onEdit, onView }: { employees?: 
           </tr>
         </thead>
         <tbody>
-          {employees.map((e: Employee) => (
-            <tr key={e.id}>
-              <td>{e.firstName} {e.lastName}</td>
-              <td>{e.email}</td>
-              <td>{e.department}</td>
-              <td>{e.designation}</td>
-              <td><Badge variant={e.status === 'active' ? 'success' : 'neutral'}>{e.status}</Badge></td>
-              <td>
-                <button className="btn btn-secondary" onClick={() => onView(e)}>View</button>
-                <button className="btn btn-secondary" onClick={() => onEdit(e)}>Edit</button>
+          {employees.length === 0 ? (
+            <tr>
+              <td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: 'var(--color-text-muted)' }}>
+                No employees found
               </td>
             </tr>
-          ))}
+          ) : (
+            employees.map((e: Employee) => {
+              const displayName =
+                e.name ||
+                `${e.firstName ?? ''} ${e.lastName ?? ''}`.trim() ||
+                '—';
+
+              const badgeVariant =
+                e.status === 'active'
+                  ? 'success'
+                  : e.status === 'on_leave'
+                  ? 'warning'
+                  : 'neutral';
+
+              return (
+                <tr key={e.id}>
+                  <td>{displayName}</td>
+                  <td>{e.email || '—'}</td>
+                  <td>{e.department || '—'}</td>
+                  <td>{e.designation || '—'}</td>
+                  <td>
+                    <Badge variant={badgeVariant}>
+                      {e.status || 'unknown'}
+                    </Badge>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button className="btn btn-secondary btn-sm" onClick={() => onView(e)}>
+                        View
+                      </button>
+                      <button className="btn btn-secondary btn-sm" onClick={() => onEdit(e)}>
+                        Edit
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })
+          )}
         </tbody>
       </Table>
     </div>

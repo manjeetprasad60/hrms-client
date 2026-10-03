@@ -17,3 +17,5 @@ export * from './subscription';
 export * from './document';
 export * from './clientAdmin';
 export * from './dashboard';
+export * from './attendance';
+export * from './leave';

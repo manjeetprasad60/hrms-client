@@ -46,7 +46,34 @@ export const API_ENDPOINTS = {
     verify: (token: string) => `/api/invitations/verify/${encodeURIComponent(token)}`,
     accept: '/api/invitations/accept',
   },
+  employees: {
+    base: '/employees',
+    create: '/employees',
+    byId: (id: string) => `/employees/${id}`,
+  },
+  attendance: {
+    base: '/attendance',
+    byId: (id: string) => `/attendance/${id}`,
+    summary: '/attendance/summary',
+    clockOut: '/attendance/clock-out',
+    byEmployee: (employeeId: string) => `/attendance/employee/${employeeId}`,
+    today: (employeeId: string) => `/attendance/today/${employeeId}`,
+  },
+  leave: {
+    base: '/leave',
+    requests: '/leave/requests',
+    requestById: (id: string) => `/leave/requests/${id}`,
+    approve: (id: string) => `/leave/requests/${id}/approve`,
+    reject: (id: string) => `/leave/requests/${id}/reject`,
+    policies: '/leave/policies',
+    policyById: (id: string) => `/leave/policies/${id}`,
+    balances: '/leave/balances',
+    balanceByEmployee: (empId: string) => `/leave/balances/${empId}`,
+    adjustBalance: '/leave/balances/adjust',
+    summary: '/leave/summary',
+  },
   plans: {
     details: (planId: string) => `/plans/${planId}`,
   },
 } as const;
+
